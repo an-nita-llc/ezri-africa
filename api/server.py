@@ -6,9 +6,13 @@ import uuid
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from ai_guard import parse_intent, strict_proof_check
-from ledger import create_escrow, find_by_capture, get_escrow, list_escrows, update_escrow
+from ledger import (
+    create_escrow, create_session, create_user, find_by_capture,
+    get_escrow, get_session_email, list_escrows, update_escrow, verify_user,
+)
 from models import CaptureIn, EscrowCreateIn, OverrideIn, ParseIn, RefundIn
 from paypal_client import MOCK, capture_order, create_order, refund_capture
 
@@ -28,15 +32,67 @@ def health() -> dict:
     return {"ok": True, "mock_paypal": MOCK, "expiry_minutes": EXPIRY_MIN}
 
 
+class SignupIn(BaseModel):
+    name: str = "John"
+    email: str = ""
+    password: str = ""
+
+
+class LoginIn(BaseModel):
+    email: str = ""
+    password: str = ""
+
+
+def _sender(request: Request) -> str:
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return get_session_email(auth[7:].strip())
+    return ""
+
+
+@app.post("/api/auth/signup")
+def auth_signup(body: SignupIn) -> dict:
+    user = create_user(body.name, body.email, body.password)
+    if not user:
+        raise HTTPException(400, "Email taken or password too short (min 4).")
+    return {"token": create_session(user["email"]), "user": user}
+
+
+@app.post("/api/auth/login")
+def auth_login(body: LoginIn) -> dict:
+    user = verify_user(body.email, body.password)
+    if not user:
+        raise HTTPException(401, "Wrong email or password.")
+    return {"token": create_session(user["email"]), "user": user}
+
+
+@app.post("/api/auth/demo")
+def auth_demo() -> dict:
+    """One-tap judge login. Idempotent demo sender."""
+    email = "demo@ezri.africa"
+    create_user("Demo Sender", email, "demo1234")
+    user = verify_user(email, "demo1234")
+    assert user is not None
+    return {"token": create_session(email), "user": user}
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request) -> dict:
+    email = _sender(request)
+    if not email:
+        raise HTTPException(401, "Not logged in.")
+    return {"email": email}
+
+
 @app.post("/api/chat/parse")
 async def chat_parse(body: ParseIn) -> dict:
     return await parse_intent(body.text, body.note)
 
 
 @app.post("/api/escrow/create")
-async def escrow_create(body: EscrowCreateIn) -> dict:
+async def escrow_create(body: EscrowCreateIn, request: Request) -> dict:
     order = await create_order(body.amount_usd)
-    row = create_escrow(body.amount_usd, body.tag, body.note, body.recipient, EXPIRY_MIN)
+    row = create_escrow(body.amount_usd, body.tag, body.note, body.recipient, EXPIRY_MIN, _sender(request))
     row = update_escrow(row["id"], paypal_order_id=order["order_id"])
     return {
         "escrow_id": row["id"],

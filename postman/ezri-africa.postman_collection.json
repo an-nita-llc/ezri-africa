@@ -6,6 +6,8 @@
   },
   "variable": [{ "key": "base", "value": "http://localhost:8000" }],
   "item": [
+    { "name": "auth demo login", "request": { "method": "POST", "url": "{{base}}/api/auth/demo" } },
+    { "name": "auth signup", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\": \"John\", \"email\": \"john@x.com\", \"password\": \"secret1\"}" }, "url": "{{base}}/api/auth/signup" } },
     { "name": "health", "request": { "method": "GET", "url": "{{base}}/api/health" } },
     { "name": "chat parse", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"text\": \"Send $60 to mom for school, lock it\"}" }, "url": "{{base}}/api/chat/parse" } },
     { "name": "escrow create", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"amount_usd\": 60, \"tag\": \"SCHOOL\", \"note\": \"semester fees\", \"recipient\": \"mom\"}" }, "url": "{{base}}/api/escrow/create" } },

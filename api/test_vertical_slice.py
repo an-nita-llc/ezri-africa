@@ -61,3 +61,21 @@ def test_webhook_capture_and_refund():
     assert c.get(f"/api/escrow/{eid}").json()["status"] == "HELD"
     w2 = c.post("/api/webhooks/paypal", json={"event_type": "PAYMENT.CAPTURE.REFUNDED", "resource": {"id": "CAP-TEST-1"}})
     assert c.get(f"/api/escrow/{eid}").json()["status"] == "REFUNDED"
+
+
+def test_auth_signup_login_me_demo():
+    s = c.post("/api/auth/signup", json={"name": "John", "email": "john@x.com", "password": "secret1"})
+    assert s.status_code == 200
+    token = s.json()["token"]
+    assert c.post("/api/auth/signup", json={"name": "John", "email": "john@x.com", "password": "secret1"}).status_code == 400
+    lg = c.post("/api/auth/login", json={"email": "john@x.com", "password": "secret1"})
+    assert lg.status_code == 200
+    assert c.post("/api/auth/login", json={"email": "john@x.com", "password": "nope"}).status_code == 401
+    me = c.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.json()["email"] == "john@x.com"
+    assert c.get("/api/auth/me").status_code == 401
+    dm = c.post("/api/auth/demo")
+    assert dm.json()["user"]["email"] == "demo@ezri.africa"
+    cr = c.post("/api/escrow/create", json={"amount_usd": 10, "tag": "GENERAL", "note": "t", "recipient": "mom"},
+                headers={"Authorization": f"Bearer {token}"})
+    assert c.get(f"/api/escrow/{cr.json()['escrow_id']}").json()["sender_email"] == "john@x.com"

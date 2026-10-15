@@ -38,7 +38,8 @@ cd api && python seed_demo.py   # 1 RELEASED + 1 NEEDS_RETRY for dashboard/video
 Thumbnail source: `assets/make_thumbnail.py` -> `assets/thumbnail.png` (1200x800, text-only, upload to Devpost).
 
 ## Endpoints
-`POST /api/chat/parse`, `POST /api/escrow/create|capture|prove|override|refund`, `POST /api/webhooks/paypal`, `GET /api/escrow/{id}`, `GET /api/dashboard?q=`.
+`POST /api/auth/signup|login|demo`, `GET /api/auth/me`, `POST /api/chat/parse`, `POST /api/escrow/create|capture|prove|override|refund`, `POST /api/webhooks/paypal`, `GET /api/escrow/{id}`, `GET /api/dashboard?q=`.
+Pages: `/` sender chat (login required to pay), `/login`, `/signup` (one-tap demo login), `/claim/[id]` receiver (no login ever).
 Postman: `postman/ezri-africa.postman_collection.json` (set `{{base}}` to hosted API to replay judge flow).
 
 ## Resources used (Devpost)

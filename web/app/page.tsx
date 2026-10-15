@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { get as idbGet, set as idbSet } from "idb-keyval";
 import PayPalButtons from "./PayPalButtons";
+import { authHeaders, clearSession, loadSession, type Session } from "./session";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 
@@ -28,6 +29,7 @@ export default function Page() {
   const [q, setQ] = useState("");
   const [queued, setQueued] = useState<any[]>([]);
   const [online, setOnline] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
   const [big, setBig] = useState(false);
   const [contrast, setContrast] = useState(false);
   const [simple, setSimple] = useState(false);
@@ -49,6 +51,7 @@ export default function Page() {
     window.addEventListener("offline", go);
     setOnline(navigator.onLine);
     try { void idbGet("ezri_outbox").then((v) => { if (Array.isArray(v)) setQueued(v); }).catch(() => {}); } catch {}
+    void loadSession().then(setSession);
     return () => { window.removeEventListener("online", go); window.removeEventListener("offline", go); };
   }, []);
 
@@ -89,7 +92,7 @@ export default function Page() {
 
   async function captureNow(eid: string, oid: string) {
     const c = await fetch(`${API}/api/escrow/capture`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
       body: JSON.stringify({ escrow_id: eid, paypal_order_id: oid }),
     });
     const cj = await c.json();
@@ -99,9 +102,13 @@ export default function Page() {
   }
 
   async function holdPay() {
+    if (!session) {
+      say("Log in first — one tap with demo login. Then Hold & Pay.");
+      return;
+    }
     const p = parsed || { amount_usd: 60, tag, note: input, recipient: "mom" };
     const r = await fetch(`${API}/api/escrow/create`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: authHeaders(session.token),
       body: JSON.stringify({ amount_usd: p.amount_usd, tag: p.tag || tag, note: input, recipient: "mom" }),
     });
     const j = await r.json();
@@ -135,7 +142,7 @@ export default function Page() {
 
   async function override() {
     const r = await fetch(`${API}/api/escrow/override`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
       body: JSON.stringify({ escrow_id: escrow.escrow_id, reason: "Sender trusts receiver" }),
     });
     const j = await r.json();
@@ -146,7 +153,7 @@ export default function Page() {
 
   async function refund() {
     const r = await fetch(`${API}/api/escrow/refund`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
       body: JSON.stringify({ escrow_id: escrow.escrow_id }),
     });
     const j = await r.json();
@@ -168,6 +175,15 @@ export default function Page() {
       <a href="#chat" style={{ position: "absolute", left: -9999 }}>Skip to chat</a>
       <header>
         <h1 style={{ margin: "4px 0" }}>Ezri Africa</h1>
+        <p aria-live="polite" style={{ margin: "4px 0" }}>
+          {session ? (
+            <>Signed in as <b>{session.email}</b>{" "}
+              <button onClick={() => { void clearSession().then(() => setSession(null)); }}>Log out</button>
+            </>
+          ) : (
+            <><a href="/login" style={{ color: "#8BC34A" }}>Log in</a> · <a href="/signup" style={{ color: "#8BC34A" }}>Sign up</a> to send</>
+          )}
+        </p>
         <p style={{ margin: 0, opacity: 0.85 }}>
           Built for Africa, Liberia as pilot. PayPal in where PayPal can&apos;t receive locally — mobile money out (MOCK in demo).
           Talk. Lock. Prove. Prove-first always.
