@@ -26,10 +26,16 @@ Set real keys: copy `../.env.example` to `.env`, add `PAYPAL_CLIENT_ID/SECRET` (
 
 ## Flow
 1. Chat parse tag/amount/FX/fraud
-2. Escrow create (PayPal Orders) -> capture -> HELD
-3. Receiver prove-first: provider ORANGE/MTN + number + bill photo -> AI PASS/FAIL
+2. Escrow create (PayPal Orders) -> approve (embedded JS SDK button, or approval-link fallback; mock auto-captures) -> capture -> HELD
+3. Receiver opens no-login claim link `/claim/{id}`: picks ORANGE/MTN + number, uploads bill photo -> AI PASS/FAIL
 4. PASS -> RELEASED + MOCK MoMo id. FAIL -> retry / sender override / refund.
 5. Expiry 10 min demo (=48h production) -> refund path.
+
+## Demo reset
+```bash
+cd api && python seed_demo.py   # 1 RELEASED + 1 NEEDS_RETRY for dashboard/video
+```
+Thumbnail source: `assets/make_thumbnail.py` -> `assets/thumbnail.png` (1200x800, text-only, upload to Devpost).
 
 ## Endpoints
 `POST /api/chat/parse`, `POST /api/escrow/create|capture|prove|override|refund`, `POST /api/webhooks/paypal`, `GET /api/escrow/{id}`, `GET /api/dashboard?q=`.

@@ -2,10 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { get as idbGet, set as idbSet } from "idb-keyval";
+import PayPalButtons from "./PayPalButtons";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const PP_CID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
 const TAGS = ["FOOD", "SCHOOL", "HEALTH", "RENT", "EMERGENCY", "GENERAL"] as const;
 
 type Msg = { from: "you" | "ai"; text: string };
@@ -85,6 +87,17 @@ export default function Page() {
     say(`${j.lock_label}. $${j.amount_usd} ≈ ${j.fx_lrd} LRD. Fraud ${j.fraud_score}/100 — ${j.fraud_reason} Tap Hold & Pay.`);
   }
 
+  async function captureNow(eid: string, oid: string) {
+    const c = await fetch(`${API}/api/escrow/capture`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ escrow_id: eid, paypal_order_id: oid }),
+    });
+    const cj = await c.json();
+    setEscrow((e: any) => ({ ...e, status: cj.status, capture_id: cj.capture_id }));
+    say(`Captured and HELD. Prove-first now: receiver picks Orange or MTN + uploads bill photo.`);
+    refresh();
+  }
+
   async function holdPay() {
     const p = parsed || { amount_usd: 60, tag, note: input, recipient: "mom" };
     const r = await fetch(`${API}/api/escrow/create`, {
@@ -93,15 +106,12 @@ export default function Page() {
     });
     const j = await r.json();
     setEscrow(j);
-    say(`Held, not released. Escrow ${j.escrow_id}. PayPal order ${j.paypal_order_id}. Approve, then we capture and HOLD.`);
-    if (j.approval_url) window.open(j.approval_url, "_blank", "noopener");
-    const c = await fetch(`${API}/api/escrow/capture`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ escrow_id: j.escrow_id, paypal_order_id: j.paypal_order_id }),
-    });
-    const cj = await c.json();
-    setEscrow({ ...j, status: cj.status, capture_id: cj.capture_id });
-    say(`Captured and HELD. Prove-first now: receiver picks Orange or MTN + uploads bill photo.`);
+    if (String(j.paypal_order_id || "").startsWith("MOCK-")) {
+      say(`Held, not released. Escrow ${j.escrow_id}. Mock PayPal order — capturing now.`);
+      await captureNow(j.escrow_id, j.paypal_order_id);
+      return;
+    }
+    say(`Order ${j.paypal_order_id} created. Approve in the PayPal button below, then we capture and HOLD.`);
     refresh();
   }
 
@@ -200,6 +210,22 @@ export default function Page() {
           <button onClick={override} disabled={!escrow}>Sender override</button>
         </div>
         {escrow && <p aria-live="polite">Escrow <b>{escrow.escrow_id}</b> — {escrow.status} · Order {escrow.paypal_order_id}</p>}
+        {escrow && (
+          <p>Receiver claim link (no login): <code>/claim/{escrow.escrow_id}</code>{" "}
+            <button onClick={() => {
+              const url = `${window.location.origin}/claim/${escrow.escrow_id}`;
+              void navigator.clipboard?.writeText(url).then(() => say(`Claim link copied: ${url}`)).catch(() => say(url));
+            }}>Copy link</button>
+          </p>
+        )}
+        {escrow && escrow.status === "DRAFT" && (
+          <>
+            <PayPalButtons orderId={escrow.paypal_order_id} clientId={PP_CID} onApproved={() => { void captureNow(escrow.escrow_id, escrow.paypal_order_id); }} />
+            {escrow.approval_url && (
+              <p><a href={escrow.approval_url} target="_blank" rel="noopener noreferrer">Approve in PayPal (new tab fallback)</a></p>
+            )}
+          </>
+        )}
       </section>
 
       <section aria-label="prove first" style={{ border: "1px solid #334", borderRadius: 12, padding: 12, marginTop: 12 }}>
