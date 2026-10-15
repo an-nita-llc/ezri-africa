@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: ezri-api
+    runtime: python
+    buildCommand: "pip install -r api/requirements.txt"
+    startCommand: "uvicorn server:app --app-dir api --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: DEMO_EXPIRY_MINUTES
+        value: 10
+  - type: web
+    name: ezri-web
+    runtime: node
+    buildCommand: "cd web && npm install && npm run build"
+    startCommand: "cd web && npm run start"
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: ezri-api
+          type: web
+          property: host
