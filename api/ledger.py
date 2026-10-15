@@ -66,3 +66,9 @@ def list_escrows(limit: int = 100) -> list[dict]:
     with _db() as con:
         rows = con.execute("SELECT * FROM escrows ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
     return [dict(r) for r in rows]
+
+
+def find_by_capture(capture_id: str) -> dict:
+    with _db() as con:
+        row = con.execute("SELECT * FROM escrows WHERE paypal_capture_id=?", (capture_id,)).fetchone()
+    return dict(row) if row else {}

@@ -4,11 +4,11 @@ import os
 import time
 import uuid
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from ai_guard import parse_intent, strict_proof_check
-from ledger import create_escrow, get_escrow, list_escrows, update_escrow
+from ledger import create_escrow, find_by_capture, get_escrow, list_escrows, update_escrow
 from models import CaptureIn, EscrowCreateIn, OverrideIn, ParseIn, RefundIn
 from paypal_client import MOCK, capture_order, create_order, refund_capture
 
@@ -124,6 +124,28 @@ def escrow_get(eid: str) -> dict:
     if row["status"] in ("HELD", "NEEDS_RETRY", "DRAFT") and time.time() > row["expires_at"]:
         row = update_escrow(eid, status="EXPIRED")
     return row
+
+
+@app.post("/api/webhooks/paypal")
+async def paypal_webhook(request: Request) -> dict:
+    """PayPal event receiver. Sandbox: configure webhook URL in developer dashboard.
+    Mock mode: hit directly with the JSON below (see postman collection)."""
+    try:
+        event = await request.json()
+    except Exception:
+        raise HTTPException(400, "invalid json")
+    etype = str(event.get("event_type", ""))
+    res = event.get("resource", {}) or {}
+    cap_id = str(res.get("id", ""))
+    if etype == "PAYMENT.CAPTURE.COMPLETED" and cap_id:
+        row = find_by_capture(cap_id)
+        if row and row["status"] == "DRAFT":
+            update_escrow(row["id"], status="HELD")
+    elif etype in ("PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED") and cap_id:
+        row = find_by_capture(cap_id)
+        if row and row["status"] != "REFUNDED":
+            update_escrow(row["id"], status="REFUNDED")
+    return {"ok": True, "event": etype}
 
 
 @app.get("/api/dashboard")

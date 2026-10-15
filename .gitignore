@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+*.tsbuildinfo
 node_modules/
 .next/
 dist/

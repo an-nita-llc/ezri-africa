@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
+import { get as idbGet, set as idbSet } from "idb-keyval";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 
@@ -45,11 +46,11 @@ export default function Page() {
     window.addEventListener("online", go);
     window.addEventListener("offline", go);
     setOnline(navigator.onLine);
-    try { setQueued(JSON.parse(localStorage.getItem("ezri_outbox") || "[]")); } catch {}
+    try { void idbGet("ezri_outbox").then((v) => { if (Array.isArray(v)) setQueued(v); }).catch(() => {}); } catch {}
     return () => { window.removeEventListener("online", go); window.removeEventListener("offline", go); };
   }, []);
 
-  useEffect(() => { localStorage.setItem("ezri_outbox", JSON.stringify(queued)); }, [queued]);
+  useEffect(() => { void idbSet("ezri_outbox", queued).catch(() => {}); }, [queued]);
 
   async function refresh(qq = q) {
     const r = await fetch(`${API}/api/dashboard?q=${encodeURIComponent(qq)}`);

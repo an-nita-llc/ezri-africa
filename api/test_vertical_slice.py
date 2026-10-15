@@ -48,3 +48,16 @@ def test_full_hold_prove_release_refund():
     c.post("/api/escrow/capture", json={"escrow_id": eid2})
     rf = c.post("/api/escrow/refund", json={"escrow_id": eid2})
     assert rf.json()["status"] == "REFUNDED"
+
+
+def test_webhook_capture_and_refund():
+    cr = c.post("/api/escrow/create", json={"amount_usd": 30, "tag": "HEALTH", "note": "clinic", "recipient": "mom"})
+    eid = cr.json()["escrow_id"]
+    from ledger import update_escrow as _up
+
+    _up(eid, paypal_capture_id="CAP-TEST-1")
+    w1 = c.post("/api/webhooks/paypal", json={"event_type": "PAYMENT.CAPTURE.COMPLETED", "resource": {"id": "CAP-TEST-1"}})
+    assert w1.json()["ok"] is True
+    assert c.get(f"/api/escrow/{eid}").json()["status"] == "HELD"
+    w2 = c.post("/api/webhooks/paypal", json={"event_type": "PAYMENT.CAPTURE.REFUNDED", "resource": {"id": "CAP-TEST-1"}})
+    assert c.get(f"/api/escrow/{eid}").json()["status"] == "REFUNDED"

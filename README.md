@@ -14,10 +14,11 @@ pip install -r requirements.txt
 pytest -q
 uvicorn server:app --port 8000
 
-# Web (new terminal)
+# Web (new terminal) — pnpm, same toolchain as AnnitaPlug web (Next 16 / React 19 / TS 5.9)
 cd web
-npm install
-npm run dev
+pnpm install
+pnpm run build
+pnpm run dev
 # open http://localhost:3000
 ```
 
@@ -31,7 +32,13 @@ Set real keys: copy `../.env.example` to `.env`, add `PAYPAL_CLIENT_ID/SECRET` (
 5. Expiry 10 min demo (=48h production) -> refund path.
 
 ## Endpoints
-`POST /api/chat/parse`, `POST /api/escrow/create|capture|prove|override|refund`, `GET /api/escrow/{id}`, `GET /api/dashboard?q=`.
+`POST /api/chat/parse`, `POST /api/escrow/create|capture|prove|override|refund`, `POST /api/webhooks/paypal`, `GET /api/escrow/{id}`, `GET /api/dashboard?q=`.
+Postman: `postman/ezri-africa.postman_collection.json` (set `{{base}}` to hosted API to replay judge flow).
+
+## Resources used (Devpost)
+- PayPal: REST Orders v2 + Payments Refunds (sandbox), Checkout approval link, Webhooks receiver, Developer Dashboard.
+- Sponsors: AG Grid (ledger + ask-filter), Render (host), Postman (collection). Skipped on purpose: Channel3/Bryntum/Elastic/APIMatic/Astropods/KERNEL/Zapier — no fit for prove-first P2P.
+- Track: Social Impact first (inclusion + accessibility), Money Movement second.
 
 ## Tools used
 - PayPal: Orders v2 create/capture, Payments refunds, sandbox. JS approval link.

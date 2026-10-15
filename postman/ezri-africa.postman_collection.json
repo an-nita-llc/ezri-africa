@@ -1,0 +1,17 @@
+{
+  "info": {
+    "name": "Ezri Africa — Proof Before Payout",
+    "description": "Judge quick-run: health -> parse -> create -> capture -> prove (PASS) -> dashboard. All mock-first, zero keys.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [{ "key": "base", "value": "http://localhost:8000" }],
+  "item": [
+    { "name": "health", "request": { "method": "GET", "url": "{{base}}/api/health" } },
+    { "name": "chat parse", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"text\": \"Send $60 to mom for school, lock it\"}" }, "url": "{{base}}/api/chat/parse" } },
+    { "name": "escrow create", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"amount_usd\": 60, \"tag\": \"SCHOOL\", \"note\": \"semester fees\", \"recipient\": \"mom\"}" }, "url": "{{base}}/api/escrow/create" } },
+    { "name": "escrow capture (HELD)", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"escrow_id\": \"EZR-PASTE-ID\", \"paypal_order_id\": \"\"}" }, "url": "{{base}}/api/escrow/capture" } },
+    { "name": "webhook capture completed", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"event_type\": \"PAYMENT.CAPTURE.COMPLETED\", \"resource\": {\"id\": \"CAP-PASTE-ID\"}}" }, "url": "{{base}}/api/webhooks/paypal" } },
+    { "name": "dashboard?q=risky", "request": { "method": "GET", "url": "{{base}}/api/dashboard?q=risky" } },
+    { "name": "escrow refund", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"escrow_id\": \"EZR-PASTE-ID\"}" }, "url": "{{base}}/api/escrow/refund" } }
+  ]
+}
