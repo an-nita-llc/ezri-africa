@@ -1,18 +1,44 @@
 import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import { AppShell } from "./shell";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title: "Ezri Africa — PayPal bridge, Liberia pilot",
-  description: "Purpose-locked P2P: PayPal in, mobile money out (mock). Talk. Lock. Prove.",
+  title: {
+    default: "Ezri Africa — Proof Before Payout",
+    template: "%s · Ezri Africa",
+  },
+  description:
+    "Chat, lock, prove. Turn PayPal into a protected mobile money bridge with AI verification, offline queue and escrow on every transaction.",
   manifest: "/manifest.webmanifest",
 };
 
-export const viewport: Viewport = { themeColor: "#0B1220", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = {
+  themeColor: "#003868",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, fontFamily: "system-ui, sans-serif", background: "#0B1220", color: "#F5F7FA" }}>
-        {children}
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

@@ -1,6 +1,8 @@
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
+  '@tailwindcss/turbopack': true
+  tailwindcss: true
   esbuild: true
   sharp: true
   unrs-resolver: true

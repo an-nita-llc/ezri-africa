@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { BadgeCheck, AlertCircle } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -28,7 +29,7 @@ export default function ClaimPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function speak(t: string) {
+  function speak(t: string) {
     setMsg(t);
     try {
       const u = new SpeechSynthesisUtterance(t.split(".")[0]);
@@ -58,50 +59,63 @@ export default function ClaimPage() {
     }
   }
 
+  if (error) {
+    return (
+      <div role="alert" className="card flex items-start gap-3 border-danger/30 bg-danger/10 text-sm text-danger">
+        <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+        <span>{error}</span>
+      </div>
+    );
+  }
+
+  if (!escrow) {
+    return <p aria-live="polite" className="text-sm text-muted-foreground">Loading…</p>;
+  }
+
   return (
-    <main style={{ margin: 0, fontFamily: "system-ui, sans-serif", background: "#0B1220", color: "#F5F7FA", minHeight: "100vh", padding: 20, fontSize: 20 }}>
-      <a href="#claim" style={{ position: "absolute", left: -9999 }}>Skip to claim form</a>
-      <h1 style={{ marginBottom: 4 }}>Ezri Africa — Claim</h1>
-      {error ? (
-        <p role="alert">{error}</p>
-      ) : !escrow ? (
-        <p aria-live="polite">Loading…</p>
+    <section aria-label="Claim form" className="card mx-auto flex w-full max-w-xl flex-col gap-4">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-annita-navy-900">Claim your transfer</h1>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          <b className="text-foreground">${escrow.amount_usd}</b> for <b className="text-foreground">{escrow.tag}</b>
+          {escrow.note ? ` — ${escrow.note}` : ""}
+        </p>
+        <p className="mt-2 text-sm">Status: <b>{escrow.status}</b></p>
+      </div>
+
+      {escrow.status === "RELEASED" ? (
+        <p role="status" className="flex items-start gap-3 rounded-xl bg-annita-green/10 px-4 py-3 text-sm text-annita-green-dark">
+          <BadgeCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <span>Paid to {escrow.provider} {escrow.provider_number}. Ref: <span className="font-mono">{escrow.mock_momo_txn_id}</span> (MOCK in demo).</span>
+        </p>
+      ) : escrow.status === "REFUNDED" || escrow.status === "EXPIRED" ? (
+        <p role="status" className="text-sm text-muted-foreground">This transfer is closed ({escrow.status}). Contact your sender.</p>
       ) : (
-        <section id="claim" aria-label="claim form" style={{ border: "1px solid #334", borderRadius: 12, padding: 16, maxWidth: 560 }}>
-          <p><b>${escrow.amount_usd}</b> for <b>{escrow.tag}</b>{escrow.note ? ` — ${escrow.note}` : ""}</p>
-          <p>Status: <b>{escrow.status}</b></p>
-          {escrow.status === "RELEASED" ? (
-            <p role="status">Paid to {escrow.provider} {escrow.provider_number}. Ref: {escrow.mock_momo_txn_id} (MOCK in demo).</p>
-          ) : escrow.status === "REFUNDED" || escrow.status === "EXPIRED" ? (
-            <p role="status">This transfer is closed ({escrow.status}). Contact your sender.</p>
-          ) : (
-            <>
-              <p>Step 1: pick where money goes. Step 2: photo your bill. Money moves only after approval.</p>
-              <label style={{ display: "block", marginTop: 12 }}>Where should money go?
-                <select value={provider} onChange={(e) => setProvider(e.target.value)} style={{ marginLeft: 8, padding: 14, fontSize: 20 }}>
-                  <option>MTN</option><option>ORANGE</option>
-                </select>
-              </label>
-              <label style={{ display: "block", marginTop: 12 }}>Mobile money number
-                <input value={pnumber} onChange={(e) => setPnumber(e.target.value)} inputMode="tel" placeholder="0881234567"
-                  style={{ display: "block", width: "100%", marginTop: 6, padding: 16, fontSize: 22, borderRadius: 10 }} />
-              </label>
-              <label style={{ display: "block", marginTop: 12 }}>Bill / quote / invoice photo (required)
-                <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  style={{ display: "block", marginTop: 6, fontSize: 18 }} />
-              </label>
-              <label style={{ display: "block", marginTop: 12 }}>What is this bill for?
-                <input value={proofNote} onChange={(e) => setProofNote(e.target.value)} placeholder="school tuition invoice"
-                  style={{ display: "block", width: "100%", marginTop: 6, padding: 14, fontSize: 20, borderRadius: 10 }} />
-              </label>
-              <button onClick={prove} style={{ marginTop: 16, padding: "18px 24px", fontSize: 22, background: "#2E7D32", color: "#fff", border: 0, borderRadius: 12, width: "100%" }}>
-                Verify & Claim
-              </button>
-            </>
-          )}
-          {msg && <p aria-live="polite" style={{ marginTop: 12 }}>{msg}</p>}
-        </section>
+        <>
+          <p className="text-sm leading-6 text-muted-foreground">Step 1: pick where money goes. Step 2: photo your bill. Money moves only after approval.</p>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cprovider" className="label">Where should money go?</label>
+            <select id="cprovider" value={provider} onChange={(e) => setProvider(e.target.value)}>
+              <option>MTN</option>
+              <option>ORANGE</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cnumber" className="label">Mobile money number</label>
+            <input id="cnumber" value={pnumber} onChange={(e) => setPnumber(e.target.value)} inputMode="tel" placeholder="0881234567" className="input font-mono" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cphoto" className="label">Bill / quote / invoice photo (required)</label>
+            <input id="cphoto" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-sm" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cnote" className="label">What is this bill for?</label>
+            <input id="cnote" value={proofNote} onChange={(e) => setProofNote(e.target.value)} placeholder="school tuition invoice" className="input" />
+          </div>
+          <button type="button" onClick={() => { void prove(); }} className="btn btn-primary btn-lg btn-block">Verify & Claim</button>
+        </>
       )}
-    </main>
+      {msg && <p aria-live="polite" className="text-sm text-muted-foreground">{msg}</p>}
+    </section>
   );
 }

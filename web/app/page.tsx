@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { get as idbGet, set as idbSet } from "idb-keyval";
+import { Mic, Contrast, Type, Languages, Copy, Check } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
 import PayPalButtons from "./PayPalButtons";
 import { authHeaders, clearSession, loadSession, type Session } from "./session";
 import "ag-grid-community/styles/ag-grid.css";
@@ -13,9 +15,25 @@ const TAGS = ["FOOD", "SCHOOL", "HEALTH", "RENT", "EMERGENCY", "GENERAL"] as con
 
 type Msg = { from: "you" | "ai"; text: string };
 
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function statusBadge(status: string) {
+  const base = "badge ";
+  if (status === "RELEASED") return `${base}bg-annita-green/10 text-annita-green-dark`;
+  if (status === "HELD") return `${base}bg-brand-100 text-brand-800`;
+  if (status === "NEEDS_RETRY" || status === "EXPIRED") return `${base}bg-danger/10 text-danger`;
+  if (status === "REFUNDED") return `${base}bg-muted text-muted-foreground`;
+  return `${base}bg-muted text-muted-foreground`;
+}
+
 export default function Page() {
   const [msgs, setMsgs] = useState<Msg[]>([
-    { from: "ai", text: "Hi, I'm Ezri. Built for Africa, Liberia as pilot. Tell me: who and how much? e.g. Send $60 to mom for school" },
+    { from: "ai", text: "Hi, I'm Ezri. Built for Africa. Tell me: who and how much? e.g. Send $60 to mom for school" },
   ]);
   const [input, setInput] = useState("Send $60 to mom for school, lock it");
   const [tag, setTag] = useState<string>("SCHOOL");
@@ -33,6 +51,9 @@ export default function Page() {
   const [big, setBig] = useState(false);
   const [contrast, setContrast] = useState(false);
   const [simple, setSimple] = useState(false);
+  const [confirmRefund, setConfirmRefund] = useState(false);
+  const [confirmOverride, setConfirmOverride] = useState(false);
+  const [copied, setCopied] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const say = useCallback((t: string) => {
@@ -58,11 +79,13 @@ export default function Page() {
   useEffect(() => { void idbSet("ezri_outbox", queued).catch(() => {}); }, [queued]);
 
   async function refresh(qq = q) {
-    const r = await fetch(`${API}/api/dashboard?q=${encodeURIComponent(qq)}`);
-    const j = await r.json();
-    setRows(j.rows || []);
+    try {
+      const r = await fetch(`${API}/api/dashboard?q=${encodeURIComponent(qq)}`);
+      const j = await r.json();
+      setRows(j.rows || []);
+    } catch {}
   }
-  useEffect(() => { refresh(""); }, []);
+  useEffect(() => { void refresh(""); }, []);
 
   function mic() {
     const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -80,14 +103,18 @@ export default function Page() {
       setQueued((qq) => [...qq, { text: input, at: Date.now() }]);
       return say("You're offline. Saved. It will send when you're back online.");
     }
-    const r = await fetch(`${API}/api/chat/parse`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: input, note: "" }),
-    });
-    const j = await r.json();
-    setParsed(j);
-    if (TAGS.includes(j.tag)) setTag(j.tag);
-    say(`${j.lock_label}. $${j.amount_usd} ≈ ${j.fx_lrd} LRD. Fraud ${j.fraud_score}/100 — ${j.fraud_reason} Tap Hold & Pay.`);
+    try {
+      const r = await fetch(`${API}/api/chat/parse`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input, note: "" }),
+      });
+      const j = await r.json();
+      setParsed(j);
+      if ((TAGS as readonly string[]).includes(j.tag)) setTag(j.tag);
+      say(`${j.lock_label}. $${j.amount_usd} ≈ ${j.fx_lrd} LRD. Fraud ${j.fraud_score}/100 — ${j.fraud_reason} Tap Hold & Pay.`);
+    } catch {
+      say("No connection. Your message is queued.");
+    }
   }
 
   async function captureNow(eid: string, oid: string) {
@@ -131,16 +158,21 @@ export default function Page() {
     fd.append("provider_number", pnumber);
     fd.append("note", proofNote);
     fd.append("proof", file);
-    const r = await fetch(`${API}/api/escrow/prove`, { method: "POST", body: fd });
-    const j = await r.json();
-    setEscrow({ ...escrow, status: j.status });
-    say(j.verdict === "PASS"
-      ? `PASS — ${j.reason} MOCK MoMo ${j.mock_momo_txn_id} to ${provider} ${pnumber}.`
-      : `FAIL — ${j.reason} Retry once, or sender overrides.`);
-    refresh();
+    try {
+      const r = await fetch(`${API}/api/escrow/prove`, { method: "POST", body: fd });
+      const j = await r.json();
+      setEscrow({ ...escrow, status: j.status });
+      say(j.verdict === "PASS"
+        ? `PASS — ${j.reason} MOCK MoMo ${j.mock_momo_txn_id} to ${provider} ${pnumber}.`
+        : `FAIL — ${j.reason} Retry once, or sender overrides.`);
+      refresh();
+    } catch {
+      say("Send failed. Check connection and retry.");
+    }
   }
 
-  async function override() {
+  async function doOverride() {
+    setConfirmOverride(false);
     const r = await fetch(`${API}/api/escrow/override`, {
       method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
       body: JSON.stringify({ escrow_id: escrow.escrow_id, reason: "Sender trusts receiver" }),
@@ -151,7 +183,8 @@ export default function Page() {
     refresh();
   }
 
-  async function refund() {
+  async function doRefund() {
+    setConfirmRefund(false);
     const r = await fetch(`${API}/api/escrow/refund`, {
       method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
       body: JSON.stringify({ escrow_id: escrow.escrow_id }),
@@ -162,118 +195,158 @@ export default function Page() {
     refresh();
   }
 
-  const style: React.CSSProperties = {
-    fontSize: big ? 20 : 16,
-    background: contrast ? "#000" : "#0B1220",
-    color: "#F5F7FA",
-    minHeight: "100vh",
-    padding: 16,
-  };
+  function copyClaim() {
+    const url = `${window.location.origin}/claim/${escrow.escrow_id}`;
+    void navigator.clipboard?.writeText(url).then(() => {
+      setCopied(true);
+      say(`Claim link copied: ${url}`);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => say(url));
+  }
 
   return (
-    <main style={style}>
-      <a href="#chat" style={{ position: "absolute", left: -9999 }}>Skip to chat</a>
-      <header>
-        <h1 style={{ margin: "4px 0" }}>Ezri Africa</h1>
-        <p aria-live="polite" style={{ margin: "4px 0" }}>
-          {session ? (
-            <>Signed in as <b>{session.email}</b>{" "}
-              <button onClick={() => { void clearSession().then(() => setSession(null)); }}>Log out</button>
-            </>
-          ) : (
-            <><a href="/login" style={{ color: "#8BC34A" }}>Log in</a> · <a href="/signup" style={{ color: "#8BC34A" }}>Sign up</a> to send</>
-          )}
-        </p>
-        <p style={{ margin: 0, opacity: 0.85 }}>
-          Built for Africa, Liberia as pilot. PayPal in where PayPal can&apos;t receive locally — mobile money out (MOCK in demo).
+    <div className={`${big ? "ezri-big" : ""} ${contrast ? "ezri-contrast" : ""} flex flex-col gap-6`}>
+      <div>
+        <p className="text-sm text-muted-foreground">{greeting()}{session ? `, ${session.name}` : ""}</p>
+        <h1 className="text-2xl font-bold tracking-tight text-annita-navy-900">
+          Send protected money
+        </h1>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Built for Africa. PayPal in where PayPal can&apos;t receive locally — mobile money out.
           Talk. Lock. Prove. Prove-first always.
         </p>
-        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }} role="toolbar" aria-label="accessibility">
-          <button onClick={mic} aria-label="speak instead of type">🎤 Speak</button>
-          <button onClick={() => setBig(!big)} aria-label="toggle big text">Big text: {big ? "on" : "off"}</button>
-          <button onClick={() => setContrast(!contrast)} aria-label="toggle high contrast">Contrast: {contrast ? "on" : "off"}</button>
-          <button onClick={() => setSimple(!simple)} aria-label="toggle simple words">Simple words: {simple ? "on" : "off"}</button>
-          <span aria-live="polite" style={{ opacity: 0.8 }}>{online ? "Online" : "Offline — queuing"} {queued.length ? `· Queued: ${queued.length}` : ""}</span>
+        <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Accessibility">
+          <button type="button" onClick={mic} className="btn btn-secondary btn-sm"><Mic aria-hidden="true" className="size-4" /> Speak</button>
+          <button type="button" onClick={() => setBig(!big)} aria-pressed={big} className="btn btn-secondary btn-sm"><Type aria-hidden="true" className="size-4" /> Big text</button>
+          <button type="button" onClick={() => setContrast(!contrast)} aria-pressed={contrast} className="btn btn-secondary btn-sm"><Contrast aria-hidden="true" className="size-4" /> Contrast</button>
+          <button type="button" onClick={() => setSimple(!simple)} aria-pressed={simple} className="btn btn-secondary btn-sm"><Languages aria-hidden="true" className="size-4" /> Simple words</button>
+          <span aria-live="polite" className="text-xs text-muted-foreground">
+            {online ? "Online" : "Offline — queuing"}{queued.length ? ` · Queued: ${queued.length}` : ""}
+          </span>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {session ? (
+              <>Signed in as <b>{session.email}</b> <button type="button" onClick={() => { void clearSession().then(() => setSession(null)); }} className="btn btn-ghost btn-sm">Log out</button></>
+            ) : (
+              <><a href="/login" className="btn btn-ghost btn-sm">Log in</a><a href="/signup" className="btn btn-ghost btn-sm">Sign up</a></>
+            )}
+          </span>
         </div>
-      </header>
+      </div>
 
-      <section id="chat" aria-label="chat" ref={boxRef} style={{ border: "1px solid #334", borderRadius: 12, padding: 12, marginTop: 12, maxHeight: 300, overflow: "auto" }}>
-        {msgs.map((m, i) => (
-          <p key={i} style={{ background: m.from === "ai" ? "#16233B" : "#1E3A2B", padding: 10, borderRadius: 10 }}>
-            <b>{m.from === "ai" ? "Ezri: " : "You: "}</b>{m.text}
-          </p>
-        ))}
-      </section>
-
-      <section aria-label="send box" style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <label htmlFor="msg" style={{ position: "absolute", left: -9999 }}>Type a message</label>
-        <input id="msg" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && parse()}
-          style={{ flex: 1, padding: 14, fontSize: big ? 20 : 16, borderRadius: 10 }} />
-        <button onClick={parse} style={{ padding: "14px 18px", fontSize: big ? 20 : 16 }}>Send</button>
-      </section>
-
-      <section aria-label="lock and pay" style={{ border: "1px solid #334", borderRadius: 12, padding: 12, marginTop: 12 }}>
-        <h2>Purpose lock + escrow</h2>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {TAGS.map((t) => (
-            <button key={t} onClick={() => setTag(t)} aria-pressed={tag === t}
-              style={{ padding: 10, background: tag === t ? "#2E7D32" : "#222", color: "#fff", borderRadius: 8 }}>{t}</button>
+      <section aria-label="Chat" className="card">
+        <div ref={boxRef} className="flex max-h-72 flex-col gap-2 overflow-y-auto" role="log" aria-label="Conversation">
+          {msgs.map((m, i) => (
+            <p key={i} className={`rounded-xl px-4 py-3 text-sm leading-6 ${m.from === "ai" ? "bg-muted text-foreground" : "bg-annita-navy-800 text-white"}`}>
+              <b>{m.from === "ai" ? "Ezri: " : "You: "}</b>{m.text}
+            </p>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-          <button onClick={holdPay} style={{ padding: 14 }}>Hold & Pay (PayPal sandbox)</button>
-          <button onClick={refund} disabled={!escrow}>Refund</button>
-          <button onClick={override} disabled={!escrow}>Sender override</button>
+        <form
+          id="send"
+          className="mt-3 flex gap-2"
+          onSubmit={(e) => { e.preventDefault(); void parse(); }}
+        >
+          <label htmlFor="msg" className="sr-only">Type a message</label>
+          <input
+            id="msg"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Send $60 to mom for school, lock it"
+            className="input"
+          />
+          <button type="submit" className="btn btn-primary shrink-0">Send</button>
+        </form>
+      </section>
+
+      <section aria-label="Purpose lock and escrow" className="card flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-annita-navy-900">Purpose lock + escrow</h2>
+          <p className="hint">Money is held, never released, until proof passes.</p>
         </div>
-        {escrow && <p aria-live="polite">Escrow <b>{escrow.escrow_id}</b> — {escrow.status} · Order {escrow.paypal_order_id}</p>}
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Purpose tags">
+          {TAGS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTag(t)}
+              aria-pressed={tag === t}
+              className={`btn btn-sm ${tag === t ? "btn-primary" : "btn-secondary"}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" onClick={() => { void holdPay(); }} className="btn btn-primary btn-block sm:w-auto">Hold & Pay (PayPal sandbox)</button>
+          <button type="button" onClick={() => setConfirmRefund(true)} disabled={!escrow} className="btn btn-danger-outline">Refund</button>
+          <button type="button" onClick={() => setConfirmOverride(true)} disabled={!escrow} className="btn btn-secondary">Sender override</button>
+        </div>
         {escrow && (
-          <p>Receiver claim link (no login): <code>/claim/{escrow.escrow_id}</code>{" "}
-            <button onClick={() => {
-              const url = `${window.location.origin}/claim/${escrow.escrow_id}`;
-              void navigator.clipboard?.writeText(url).then(() => say(`Claim link copied: ${url}`)).catch(() => say(url));
-            }}>Copy link</button>
-          </p>
+          <div className="flex flex-col gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
+            <p>
+              Escrow <b className="font-mono">{escrow.escrow_id}</b>{" "}
+              <span className={statusBadge(escrow.status)}>{escrow.status}</span>{" "}
+              <span className="text-muted-foreground">Order {escrow.paypal_order_id}</span>
+            </p>
+            <p className="flex flex-wrap items-center gap-2">
+              Receiver claim link (no login): <code className="font-mono">/claim/{escrow.escrow_id}</code>
+              <button type="button" onClick={copyClaim} className="btn btn-secondary btn-sm">
+                {copied ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
+                {copied ? "Copied" : "Copy link"}
+              </button>
+            </p>
+          </div>
         )}
         {escrow && escrow.status === "DRAFT" && (
           <>
             <PayPalButtons orderId={escrow.paypal_order_id} clientId={PP_CID} onApproved={() => { void captureNow(escrow.escrow_id, escrow.paypal_order_id); }} />
             {escrow.approval_url && (
-              <p><a href={escrow.approval_url} target="_blank" rel="noopener noreferrer">Approve in PayPal (new tab fallback)</a></p>
+              <p className="text-sm"><a href={escrow.approval_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-700 hover:underline">Approve in PayPal (new tab fallback)</a></p>
             )}
           </>
         )}
       </section>
 
-      <section aria-label="prove first" style={{ border: "1px solid #334", borderRadius: 12, padding: 12, marginTop: 12 }}>
-        <h2>Receiver: prove-first, then pick provider</h2>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <label>Provider
-            <select value={provider} onChange={(e) => setProvider(e.target.value)} style={{ marginLeft: 6, padding: 10 }}>
-              <option>MTN</option><option>ORANGE</option>
+      <section aria-label="Prove first" className="card flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-annita-navy-900">Receiver: prove-first, then pick provider</h2>
+          <p className="hint">Upload the bill before money moves. Always.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="provider" className="label">Provider</label>
+            <select id="provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
+              <option>MTN</option>
+              <option>ORANGE</option>
             </select>
-          </label>
-          <label>MoMo number
-            <input value={pnumber} onChange={(e) => setPnumber(e.target.value)} inputMode="tel" style={{ marginLeft: 6, padding: 10 }} />
-          </label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="pnumber" className="label">MoMo number</label>
+            <input id="pnumber" value={pnumber} onChange={(e) => setPnumber(e.target.value)} inputMode="tel" className="input font-mono" />
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-          <label>Bill / invoice photo (required)
-            <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ marginLeft: 6 }} />
-          </label>
-          <label>Proof note
-            <input value={proofNote} onChange={(e) => setProofNote(e.target.value)} style={{ marginLeft: 6, padding: 10 }} />
-          </label>
-          <button onClick={prove} style={{ padding: 14 }}>Verify & Release</button>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="proof" className="label">Bill / invoice photo (required)</label>
+          <input id="proof" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-sm" />
         </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="proofnote" className="label">Proof note</label>
+          <input id="proofnote" value={proofNote} onChange={(e) => setProofNote(e.target.value)} className="input" />
+        </div>
+        <button type="button" onClick={() => { void prove(); }} className="btn btn-primary btn-lg btn-block sm:w-auto">Verify & Release</button>
       </section>
 
-      <section aria-label="dashboard" style={{ marginTop: 12 }}>
-        <h2>Live ledger (AG Grid)</h2>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder='Try: risky, school, mom' aria-label="ask your ledger" style={{ flex: 1, padding: 10 }} />
-          <button onClick={() => refresh()}>Ask</button>
+      <section aria-label="Live ledger" id="ledger" className="card flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-annita-navy-900">Live ledger</h2>
+          <p className="hint">Ask in plain words. Try: risky, school, mom.</p>
         </div>
-        <div className="ag-theme-quartz" style={{ height: 260 }}>
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void refresh(); }}>
+          <label htmlFor="ask" className="sr-only">Ask your ledger</label>
+          <input id="ask" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Try: risky, school, mom" className="input" />
+          <button type="submit" className="btn btn-secondary shrink-0">Ask</button>
+        </form>
+        <div className="ag-theme-quartz h-64">
           <AgGridReact
             rowData={rows}
             columnDefs={[
@@ -286,11 +359,33 @@ export default function Page() {
             ]}
           />
         </div>
+        <p className="hint">Demo: PayPal sandbox real when keys set, else MOCK. MoMo always MOCK in contest. Expiry 10 min in demo = 48h production.</p>
       </section>
 
-      <footer style={{ opacity: 0.7, marginTop: 12 }}>
-        <p>Demo: PayPal sandbox real when keys set, else MOCK. MoMo always MOCK in contest. Expiry 10 min in demo = 48h production.</p>
-      </footer>
-    </main>
+      <Modal
+        open={confirmRefund}
+        onClose={() => setConfirmRefund(false)}
+        title="Refund this transfer?"
+        description="The PayPal capture will be refunded to the sender. This cannot be undone."
+        actions={
+          <>
+            <button type="button" onClick={() => setConfirmRefund(false)} className="btn btn-secondary btn-block sm:w-auto">Keep holding</button>
+            <button type="button" onClick={() => { void doRefund(); }} className="btn btn-danger btn-block sm:w-auto">Yes, refund</button>
+          </>
+        }
+      />
+      <Modal
+        open={confirmOverride}
+        onClose={() => setConfirmOverride(false)}
+        title="Release despite FAIL?"
+        description="The AI check did not pass. Releasing anyway records a sender override on the ledger."
+        actions={
+          <>
+            <button type="button" onClick={() => setConfirmOverride(false)} className="btn btn-secondary btn-block sm:w-auto">Keep holding</button>
+            <button type="button" onClick={() => { void doOverride(); }} className="btn btn-primary btn-block sm:w-auto">Release anyway</button>
+          </>
+        }
+      />
+    </div>
   );
 }

@@ -1,9 +1,9 @@
 {
-  "name": "Ezri Africa",
+  "name": "Ezri Africa — Proof Before Payout",
   "short_name": "Ezri",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B1220",
-  "theme_color": "#0B1220",
-  "description": "Purpose-locked P2P: PayPal in, mobile money out (mock)."
+  "background_color": "#f8fafc",
+  "theme_color": "#003868",
+  "description": "Chat, lock, prove. Protected mobile money with AI verification and escrow."
 }

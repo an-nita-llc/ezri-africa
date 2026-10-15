@@ -1,20 +1,20 @@
 "use client";
 import { useState } from "react";
+import { AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { saveSession } from "./session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const box: React.CSSProperties = { margin: 0, fontFamily: "system-ui, sans-serif", background: "#0B1220", color: "#F5F7FA", minHeight: "100vh", padding: 20, fontSize: 20 };
-const input: React.CSSProperties = { display: "block", width: "100%", maxWidth: 420, marginTop: 6, padding: 16, fontSize: 20, borderRadius: 10 };
-const btn: React.CSSProperties = { marginTop: 16, padding: "16px 24px", fontSize: 20, background: "#2E7D32", color: "#fff", border: 0, borderRadius: 12 };
 
-function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {
+function Shell({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
   return (
-    <main style={box}>
-      <h1>{title}</h1>
-      <p style={{ opacity: 0.85 }}>One sender login. Receivers never log in — they use the claim link.</p>
+    <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-annita-navy-900">{title}</h1>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">{sub}</p>
+      </div>
       {children}
-    </main>
+    </div>
   );
 }
 
@@ -25,7 +25,7 @@ export function LoginForm() {
   const [msg, setMsg] = useState("");
 
   async function go(path: string, body?: object) {
-    setMsg("Working…");
+    setMsg("");
     try {
       const r = await fetch(`${API}${path}`, {
         method: "POST",
@@ -42,16 +42,27 @@ export function LoginForm() {
   }
 
   return (
-    <AuthShell title="Ezri Africa — Log in">
-      <label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" autoComplete="email" style={input} /></label>
-      <label style={{ display: "block", marginTop: 12 }}>Password
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" style={input} />
-      </label>
-      <button onClick={() => go("/api/auth/login", { email, password })} style={btn}>Log in</button>
-      <p><button onClick={() => go("/api/auth/demo")} style={{ ...btn, background: "#334" }}>One-tap demo login</button></p>
-      <p>No account? <a href="/signup" style={{ color: "#8BC34A" }}>Sign up</a> · <a href="/" style={{ color: "#8BC34A" }}>Back</a></p>
-      {msg && <p aria-live="polite">{msg}</p>}
-    </AuthShell>
+    <Shell title="Log in" sub="One sender login. Receivers never log in — they use the claim link.">
+      {msg ? (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <span>{msg}</span>
+        </div>
+      ) : null}
+      <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void go("/api/auth/login", { email, password }); }}>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="email" className="label">Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="input" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="password" className="label">Password</label>
+          <input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input" />
+        </div>
+        <button type="submit" className="btn btn-primary btn-block">Log in</button>
+      </form>
+      <button type="button" onClick={() => go("/api/auth/demo")} className="btn btn-secondary btn-block">One-tap demo login</button>
+      <p className="text-sm text-muted-foreground">No account? <a href="/signup" className="font-semibold text-brand-700 hover:underline">Sign up</a> · <a href="/" className="font-semibold text-brand-700 hover:underline">Back</a></p>
+    </Shell>
   );
 }
 
@@ -63,7 +74,6 @@ export function SignupForm() {
   const [msg, setMsg] = useState("");
 
   async function submit() {
-    setMsg("Working…");
     try {
       const r = await fetch(`${API}/api/auth/signup`, {
         method: "POST",
@@ -80,15 +90,30 @@ export function SignupForm() {
   }
 
   return (
-    <AuthShell title="Ezri Africa — Sign up">
-      <label>Name<input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" style={input} /></label>
-      <label style={{ display: "block", marginTop: 12 }}>Email<input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" autoComplete="email" style={input} /></label>
-      <label style={{ display: "block", marginTop: 12 }}>Password (min 4)
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" style={input} />
-      </label>
-      <button onClick={submit} style={btn}>Create account</button>
-      <p>Have an account? <a href="/login" style={{ color: "#8BC34A" }}>Log in</a> · <a href="/" style={{ color: "#8BC34A" }}>Back</a></p>
-      {msg && <p aria-live="polite">{msg}</p>}
-    </AuthShell>
+    <Shell title="Sign up" sub="Create your sender account. One login sends for everyone.">
+      {msg ? (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <span>{msg}</span>
+        </div>
+      ) : null}
+      <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="name" className="label">Name</label>
+          <input id="name" name="name" type="text" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John" className="input" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="email" className="label">Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="input" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="password" className="label">Password (min 4)</label>
+          <input id="password" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input" />
+          <p className="hint">Demo-grade auth for the contest. Production uses full KYC.</p>
+        </div>
+        <button type="submit" className="btn btn-primary btn-block">Create account</button>
+      </form>
+      <p className="text-sm text-muted-foreground">Have an account? <a href="/login" className="font-semibold text-brand-700 hover:underline">Log in</a> · <a href="/" className="font-semibold text-brand-700 hover:underline">Back</a></p>
+    </Shell>
   );
 }
