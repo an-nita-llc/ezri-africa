@@ -86,6 +86,53 @@ function statusPill(status: string) {
   }
 }
 
+/** Inline 4-digit PIN step — the agent never executes without it (demo PIN 1234). */
+function PinEntry({
+  pin,
+  pinError,
+  onPinChange,
+  onBack,
+  onConfirm,
+  confirmLabel,
+  confirmClass,
+}: {
+  pin: string;
+  pinError: string;
+  onPinChange: (v: string) => void;
+  onBack: () => void;
+  onConfirm: () => void;
+  confirmLabel: string;
+  confirmClass: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={4}
+          value={pin}
+          onChange={(event) => onPinChange(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+          placeholder="••••"
+          aria-label="4-digit money PIN"
+          className="input w-28 min-h-9 text-center text-base font-bold tracking-[0.4em]"
+        />
+        <span className="text-[11px] font-semibold text-muted-foreground">Demo PIN: 1234</span>
+      </div>
+      {pinError ? <p className="text-[11px] font-bold text-danger">{pinError}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">
+          Back
+        </button>
+        <button type="button" onClick={onConfirm} className={`${confirmClass} btn-sm gap-1`}>
+          {confirmLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -97,7 +144,16 @@ export default function DashboardPage() {
   const [selectedEscrow, setSelectedEscrow] = useState<any>(null);
   const [confirmRefund, setConfirmRefund] = useState(false);
   const [confirmOverride, setConfirmOverride] = useState(false);
+  const [pinStage, setPinStage] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  function resetConfirmPins() {
+    setPinStage(false);
+    setPin("");
+    setPinError("");
+  }
 
   const fetchLedger = useCallback(
     async (qStr = searchQuery) => {
@@ -129,6 +185,11 @@ export default function DashboardPage() {
 
   async function handleOverride() {
     if (!selectedEscrow || !session) return;
+    if (pin !== "1234") {
+      setPinError("Wrong PIN. Your demo PIN is 1234.");
+      return;
+    }
+    resetConfirmPins();
     setConfirmOverride(false);
     await fetch(`${API}/api/escrow/override`, {
       method: "POST",
@@ -143,6 +204,11 @@ export default function DashboardPage() {
 
   async function handleRefund() {
     if (!selectedEscrow || !session) return;
+    if (pin !== "1234") {
+      setPinError("Wrong PIN. Your demo PIN is 1234.");
+      return;
+    }
+    resetConfirmPins();
     setConfirmRefund(false);
     await fetch(`${API}/api/escrow/refund`, {
       method: "POST",
@@ -426,6 +492,7 @@ export default function DashboardPage() {
                         setSelectedEscrow(r);
                         setConfirmOverride(true);
                         setConfirmRefund(false);
+                        resetConfirmPins();
                       }}
                       className="btn btn-secondary btn-sm"
                     >
@@ -437,6 +504,7 @@ export default function DashboardPage() {
                         setSelectedEscrow(r);
                         setConfirmRefund(true);
                         setConfirmOverride(false);
+                        resetConfirmPins();
                       }}
                       className="btn btn-danger-outline btn-sm"
                     >
@@ -446,29 +514,57 @@ export default function DashboardPage() {
                 ) : null}
               </div>
 
-              {/* Inline confirmations — on the page, no popups */}
+              {/* Inline confirmations — on the page, no popups.
+                  Two stages: approval first, then 4-digit PIN (demo 1234). */}
               {selectedEscrow?.id === r.id && confirmOverride && (
                 <div className="flex flex-col gap-3 rounded-2xl border border-brand-300 bg-brand-50 p-4 text-xs">
                   <p className="font-bold text-foreground">
                     Override AI &amp; disburse mobile money for {r.id}? The manual
                     override is recorded on the ledger.
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setConfirmOverride(false)}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleOverride()}
-                      className="btn btn-primary btn-sm"
-                    >
-                      Confirm Override &amp; Disburse
-                    </button>
-                  </div>
+                  {!pinStage ? (
+                    <>
+                      <p className="text-[11px] leading-4 text-muted-foreground">
+                        The agent pauses here — nothing executes until you approve and enter your PIN.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmOverride(false);
+                            resetConfirmPins();
+                          }}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPinStage(true)}
+                          className="btn btn-primary btn-sm gap-1"
+                        >
+                          <ShieldAlert className="size-3.5" /> Approve &amp; enter PIN
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <PinEntry
+                      pin={pin}
+                      pinError={pinError}
+                      onPinChange={(v) => {
+                        setPin(v);
+                        setPinError("");
+                      }}
+                      onBack={() => {
+                        setPinStage(false);
+                        setPin("");
+                        setPinError("");
+                      }}
+                      onConfirm={() => void handleOverride()}
+                      confirmLabel="Confirm Override &amp; Disburse"
+                      confirmClass="btn btn-primary"
+                    />
+                  )}
                 </div>
               )}
               {selectedEscrow?.id === r.id && confirmRefund && (
@@ -477,22 +573,49 @@ export default function DashboardPage() {
                     Refund the PayPal escrow capture for {r.id}? Captured funds
                     return to the sender&apos;s PayPal account.
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setConfirmRefund(false)}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleRefund()}
-                      className="btn btn-danger btn-sm"
-                    >
-                      Confirm PayPal Refund
-                    </button>
-                  </div>
+                  {!pinStage ? (
+                    <>
+                      <p className="text-[11px] leading-4 text-danger/80">
+                        The agent pauses here — no refund runs until you approve and enter your PIN.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmRefund(false);
+                            resetConfirmPins();
+                          }}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPinStage(true)}
+                          className="btn btn-primary btn-sm gap-1"
+                        >
+                          <ShieldAlert className="size-3.5" /> Approve &amp; enter PIN
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <PinEntry
+                      pin={pin}
+                      pinError={pinError}
+                      onPinChange={(v) => {
+                        setPin(v);
+                        setPinError("");
+                      }}
+                      onBack={() => {
+                        setPinStage(false);
+                        setPin("");
+                        setPinError("");
+                      }}
+                      onConfirm={() => void handleRefund()}
+                      confirmLabel="Confirm PayPal Refund"
+                      confirmClass="btn btn-danger"
+                    />
+                  )}
                 </div>
               )}
             </div>
