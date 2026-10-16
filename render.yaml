@@ -11,7 +11,8 @@ services:
       - key: DEMO_EXPIRY_MINUTES
         value: 10
       # After first deploy, add in dashboard: CORS_ALLOWED_ORIGINS (web URL),
-      # PAYPAL_CLIENT_ID / PAYPAL_SECRET (sandbox), OPENROUTER_API_KEY (optional).
+      # PAYPAL_CLIENT_ID / PAYPAL_SECRET (sandbox), OPENROUTER_API_KEY (optional),
+      # NOTIFY_WEBHOOK_URL (Zapier Catch Hook for escrow event notifications).
   - type: web
     name: ezri-web
     runtime: node

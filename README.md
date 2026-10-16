@@ -166,6 +166,7 @@ Optional real keys: copy `.env.example` → `api/.env` and set `PAYPAL_CLIENT_ID
 | `NEXT_PUBLIC_API_URL` | web (build) | `http://localhost:8000` | API base for the browser |
 | `CORS_ALLOWED_ORIGINS` | api | includes `localhost:3000` in dev | Allowed origins |
 | `EZRI_FEE_PCT` | api | `0.02` | 2% platform fee, added on top |
+| `NOTIFY_WEBHOOK_URL` | api | — (silent) | HTTPS endpoint (Zapier Catch Hook, Make, webhook.site) receiving every escrow event; unset = no-op |
 | `DEMO_EXPIRY_MINUTES` | api | `10` | Demo escrow clock (48h in prod) |
 | `OPENROUTER_API_KEY` | api | — (rules only) | LLM intent refinement |
 | `EZRI_FX_LRD` | api/web | `194.50` | Standardized USD→LRD rate |
@@ -190,6 +191,44 @@ Optional real keys: copy `.env.example` → `api/.env` and set `PAYPAL_CLIENT_ID
 | `GET /api/dashboard?q=` | Ledger rows + natural-language filter |
 
 **Postman:** `postman/ezri-africa.postman_collection.json` — set `{{base}}` to the hosted API to replay the judge flow.
+
+---
+
+## Event webhooks → Zapier (notifications that actually fire)
+
+Set `NOTIFY_WEBHOOK_URL` on the API and every escrow lifecycle event is POSTed there as JSON (best-effort: 4s timeout, failures swallowed, money movement never blocks). Unset = silent, so judges run with zero config.
+
+| Event | When it fires | Settings toggle it feeds |
+|---|---|---|
+| `transfer.created` | Escrow + PayPal order created | Transfer alerts |
+| `transfer.held` | Funds captured → HELD | Transfer alerts |
+| `proof.passed` / `proof.failed` | Receiver's bill photo verdict (+ reason) | Escrow & proof events |
+| `transfer.released` | PASS or sender override → MOCK MoMo id | Transfer alerts · Claim updates |
+| `transfer.overridden` | Sender releases after FAIL (+ reason) | Escrow & proof events |
+| `transfer.refunded` | Refund of amount + fee (+ refund id) | Transfer alerts |
+| `transfer.expired` | Clock ran out with no proof | Transfer alerts |
+
+Payload: `event, escrow_id, status, tag, amount_usd, fee_usd, total_usd, provider, provider_number, verdict, verdict_reason, paypal_order_id, paypal_capture_id, mock_momo_txn_id, occurred_at` (+ event extras). Only enable an HTTPS endpoint you trust — payloads carry the receiver's payout number.
+
+**5-minute Zapier setup (also the live demo trick):**
+1. Zapier → Create Zap → Trigger "Webhooks by Zapier → Catch Hook" → copy the hook URL.
+2. Set `NOTIFY_WEBHOOK_URL` to that URL (Render dashboard → redeploy API).
+3. Add Filter steps per event (`transfer.released`, `proof.failed`, …) → actions: SMS via Twilio, email, Slack.
+4. No Zapier account? Point the URL at `webhook.site` and watch events arrive live while you run the demo chat.
+
+`GET /api/health` reports `"notify_webhook": true/false` so you can verify wiring from the browser.
+
+---
+
+## APIMatic — hosted API docs + SDK portal
+
+FastAPI already serves a fully-described contract: `<api>/openapi.json` (import file) and `<api>/api/docs` (live Swagger UI). To mint the sponsor deliverable:
+
+1. APIMatic Dashboard → Import API → "Import via URL" → paste `https://<your-api>/openapi.json` (locally: `http://127.0.0.1:8000/openapi.json`).
+2. Generate → publish the hosted Developer Portal; generate the JavaScript/TypeScript SDK in one click.
+3. Link the portal URL from the Devpost submission under "APIMatic — generated SDK + docs".
+
+No code changes needed — the app ships with title, version (`0.1.0`), contact and MIT license metadata baked into the spec.
 
 ---
 

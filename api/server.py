@@ -4,11 +4,12 @@ import os
 import time
 import uuid
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ai_guard import FEE_PCT, fee_of, parse_intent, strict_proof_check
+from notify import emit, webhook_url
 from ledger import (
     create_escrow, create_session, create_user, find_by_capture,
     get_escrow, get_session_email, get_user, list_escrows, update_escrow, verify_user,
@@ -33,7 +34,17 @@ if not _origins_env:
     # env var is explicitly set, i.e. real deployments).
     _CORS_ORIGINS += ["http://localhost:3000", "http://127.0.0.1:3000"]
 
-app = FastAPI(title="Ezri Africa — PayPal AI bridge (Liberia pilot)")
+app = FastAPI(
+    title="Ezri Africa — Proof Before Payout API",
+    version="0.1.0",
+    description=(
+        "Purpose-locked P2P escrow for Africa: PayPal in, AI-guarded prove-first "
+        "verification, mobile-money out (mock). Import /openapi.json into APIMatic "
+        "to generate the hosted docs + SDK portal."
+    ),
+    contact={"name": "Annita LLC", "email": "annitallc@gmail.com"},
+    license_info={"name": "MIT"},
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS_ORIGINS,
@@ -50,6 +61,7 @@ def health() -> dict:
         "expiry_minutes": EXPIRY_MIN,
         "fee_pct": FEE_PCT,  # Ezri platform fee: 2% of every transaction
         "fx_lrd": 194.50,
+        "notify_webhook": bool(webhook_url()),  # event webhook (Zapier) configured?
     }
 
 
@@ -147,12 +159,16 @@ async def chat_parse(body: ParseIn) -> dict:
 
 
 @app.post("/api/escrow/create")
-async def escrow_create(body: EscrowCreateIn, request: Request) -> dict:
+async def escrow_create(
+    body: EscrowCreateIn, request: Request, background: BackgroundTasks
+) -> dict:
     fee = fee_of(body.amount_usd)          # 2% Ezri service fee
     total = round(body.amount_usd + fee, 2)  # what PayPal actually charges the sender
     order = await create_order(total)
     row = create_escrow(body.amount_usd, body.tag, body.note, body.recipient, EXPIRY_MIN, _sender(request))
     row = update_escrow(row["id"], paypal_order_id=order["order_id"])
+    emit(background, "transfer.created", row,
+         {"paypal_order_id": order["order_id"], "approval_url": order["approval_url"]})
     return {
         "escrow_id": row["id"],
         "paypal_order_id": order["order_id"],
@@ -167,18 +183,22 @@ async def escrow_create(body: EscrowCreateIn, request: Request) -> dict:
 
 
 @app.post("/api/escrow/capture")
-async def escrow_capture(body: CaptureIn) -> dict:
+async def escrow_capture(body: CaptureIn, background: BackgroundTasks) -> dict:
     row = get_escrow(body.escrow_id)
     if not row:
         raise HTTPException(404, "escrow not found")
     order_id = body.paypal_order_id or row["paypal_order_id"]
     cap = await capture_order(order_id)
+    was_held = row["status"] == "HELD"
     row = update_escrow(row["id"], paypal_order_id=order_id, paypal_capture_id=cap["capture_id"], status="HELD")
+    if not was_held:
+        emit(background, "transfer.held", row, {"capture_id": cap["capture_id"]})
     return {"escrow_id": row["id"], "status": "HELD", "capture_id": cap["capture_id"]}
 
 
 @app.post("/api/escrow/prove")
 async def escrow_prove(
+    background: BackgroundTasks,
     escrow_id: str = Form(...),
     provider: str = Form(...),
     provider_number: str = Form(...),
@@ -201,16 +221,19 @@ async def escrow_prove(
             escrow_id, provider=prov, provider_number=provider_number,
             verdict="PASS", verdict_reason=reason, mock_momo_txn_id=momo, status="RELEASED",
         )
+        emit(background, "proof.passed", row, {"reason": reason, "provider": prov})
+        emit(background, "transfer.released", row, {"mock_momo_txn_id": momo})
         return {"escrow_id": escrow_id, "status": "RELEASED", "verdict": "PASS",
                 "reason": reason, "provider": prov, "mock_momo_txn_id": momo}
     row = update_escrow(escrow_id, provider=prov, provider_number=provider_number,
                         verdict="FAIL", verdict_reason=reason, status="NEEDS_RETRY")
+    emit(background, "proof.failed", row, {"reason": reason, "provider": prov})
     return {"escrow_id": escrow_id, "status": "NEEDS_RETRY", "verdict": "FAIL",
             "reason": reason, "provider": prov, "mock_momo_txn_id": None}
 
 
 @app.post("/api/escrow/override")
-def escrow_override(body: OverrideIn) -> dict:
+def escrow_override(body: OverrideIn, background: BackgroundTasks) -> dict:
     row = get_escrow(body.escrow_id)
     if not row:
         raise HTTPException(404, "escrow not found")
@@ -220,11 +243,13 @@ def escrow_override(body: OverrideIn) -> dict:
     row = update_escrow(body.escrow_id, verdict="PASS",
                         verdict_reason=f"Sender override: {body.reason}",
                         mock_momo_txn_id=momo, status="RELEASED")
+    emit(background, "transfer.overridden", row,
+         {"reason": body.reason, "mock_momo_txn_id": momo})
     return {"escrow_id": row["id"], "status": "RELEASED", "mock_momo_txn_id": momo}
 
 
 @app.post("/api/escrow/refund")
-async def escrow_refund(body: RefundIn) -> dict:
+async def escrow_refund(body: RefundIn, background: BackgroundTasks) -> dict:
     row = get_escrow(body.escrow_id)
     if not row:
         raise HTTPException(404, "escrow not found")
@@ -234,21 +259,24 @@ async def escrow_refund(body: RefundIn) -> dict:
     charged = round(row["amount_usd"] + float(row.get("fee_usd") or 0), 2)
     out = await refund_capture(row.get("paypal_capture_id", ""), charged)
     row = update_escrow(row["id"], status="REFUNDED")
+    emit(background, "transfer.refunded", row,
+         {"refund_id": out["refund_id"], "refunded_usd": charged})
     return {"escrow_id": row["id"], "status": "REFUNDED", "refund_id": out["refund_id"], "refunded_usd": charged}
 
 
 @app.get("/api/escrow/{eid}")
-def escrow_get(eid: str) -> dict:
+def escrow_get(eid: str, background: BackgroundTasks) -> dict:
     row = get_escrow(eid)
     if not row:
         raise HTTPException(404, "escrow not found")
     if row["status"] in ("HELD", "NEEDS_RETRY", "DRAFT") and time.time() > row["expires_at"]:
         row = update_escrow(eid, status="EXPIRED")
+        emit(background, "transfer.expired", row)
     return row
 
 
 @app.post("/api/webhooks/paypal")
-async def paypal_webhook(request: Request) -> dict:
+async def paypal_webhook(request: Request, background: BackgroundTasks) -> dict:
     """PayPal event receiver. Sandbox: configure webhook URL in developer dashboard.
     Mock mode: hit directly with the JSON below (see postman collection).
     SECURITY NOTE (demo only): no signature verification here — do NOT reuse
@@ -264,11 +292,13 @@ async def paypal_webhook(request: Request) -> dict:
     if etype == "PAYMENT.CAPTURE.COMPLETED" and cap_id:
         row = find_by_capture(cap_id)
         if row and row["status"] == "DRAFT":
-            update_escrow(row["id"], status="HELD")
+            row = update_escrow(row["id"], status="HELD")
+            emit(background, "transfer.held", row, {"capture_id": cap_id})
     elif etype in ("PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED") and cap_id:
         row = find_by_capture(cap_id)
         if row and row["status"] != "REFUNDED":
-            update_escrow(row["id"], status="REFUNDED")
+            row = update_escrow(row["id"], status="REFUNDED")
+            emit(background, "transfer.refunded", row, {"capture_id": cap_id})
     return {"ok": True, "event": etype}
 
 

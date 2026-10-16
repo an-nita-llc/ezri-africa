@@ -245,26 +245,31 @@ export function SettingsContent() {
 
       {/* Notifications */}
       <SectionCard title="Notifications" icon={Bell}>
+        <p className="text-xs leading-5 text-muted-foreground">
+          These choose which escrow events reach you. They are delivered through
+          the API event webhook (Zapier, SMS, email) when the deploy sets
+          NOTIFY_WEBHOOK_URL — each toggle maps to the event group in brackets.
+        </p>
         <Toggle
           checked={prefs.notifyTransfers}
           onChange={(v) => set("notifyTransfers", v)}
           icon={Sparkles}
           label="Transfer alerts"
-          hint="Escrow created, captured, held and released."
+          hint="Escrow created, captured, held and released. [transfer.*]"
         />
         <Toggle
           checked={prefs.notifyEscrow}
           onChange={(v) => set("notifyEscrow", v)}
           icon={ShieldCheck}
           label="Escrow & proof events"
-          hint="When the receiver submits a bill photo and the AI verdict arrives."
+          hint="When the receiver submits a bill photo and the AI verdict arrives. [proof.*, transfer.overridden]"
         />
         <Toggle
           checked={prefs.notifyClaims}
           onChange={(v) => set("notifyClaims", v)}
           icon={Bell}
           label="Claim link updates"
-          hint="When a receiver opens or claims one of your transfers."
+          hint="When a receiver opens or claims one of your transfers. [transfer.released]"
         />
       </SectionCard>
 
