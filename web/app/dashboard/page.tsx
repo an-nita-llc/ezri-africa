@@ -69,22 +69,22 @@ function statusPill(status: string) {
       );
     case "EXPIRED":
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-500/20">
-          <span className="size-1.5 rounded-full bg-slate-400" />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
+          <span className="size-1.5 rounded-full bg-muted-foreground/60" />
           Expired
         </span>
       );
     case "REFUNDED":
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-500/20">
-          <span className="size-1.5 rounded-full bg-slate-400" />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
+          <span className="size-1.5 rounded-full bg-muted-foreground/60" />
           Refunded
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-500/20">
-          <span className="size-1.5 rounded-full bg-slate-400" />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
+          <span className="size-1.5 rounded-full bg-muted-foreground/60" />
           {status}
         </span>
       );
@@ -123,9 +123,9 @@ function PinEntry({
           aria-label="4-digit money PIN"
           className="input w-28 min-h-9 text-center text-base font-bold tracking-[0.4em]"
         />
-        <span className="text-[11px] font-semibold text-muted-foreground">Demo PIN: 1234</span>
+        <span className="text-xs font-semibold text-muted-foreground">Demo PIN: 1234</span>
       </div>
-      {pinError ? <p className="text-[11px] font-bold text-danger">{pinError}</p> : null}
+      {pinError ? <p className="text-xs font-bold text-danger">{pinError}</p> : null}
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">
           Back
@@ -262,7 +262,7 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-annita-navy-900">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
               Transfers & Escrow Ledger
             </h1>
             <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 border border-brand-200">
@@ -441,7 +441,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Row 2: amounts stacked on the page */}
-              <div className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/40 p-3 text-xs">
+              <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 rounded-2xl bg-muted/40 p-3 text-xs">
                 <div>
                   <span className="block font-bold uppercase tracking-wider text-muted-foreground">
                     Amount
@@ -549,7 +549,7 @@ export default function DashboardPage() {
                   </p>
                   {!pinStage ? (
                     <>
-                      <p className="text-[11px] leading-4 text-muted-foreground">
+                      <p className="text-xs leading-4 text-muted-foreground">
                         The agent pauses here — nothing executes until you approve and enter your PIN.
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -600,7 +600,7 @@ export default function DashboardPage() {
                   </p>
                   {!pinStage ? (
                     <>
-                      <p className="text-[11px] leading-4 text-danger/80">
+                      <p className="text-xs leading-4 text-danger/80">
                         The agent pauses here — no refund runs until you approve and enter your PIN.
                       </p>
                       <div className="flex flex-wrap gap-2">

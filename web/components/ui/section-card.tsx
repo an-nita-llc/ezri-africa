@@ -44,7 +44,7 @@ export function SectionCard({
           {title}
         </h2>
         {badge ? (
-          <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-brand-700">
+          <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-xs font-extrabold uppercase tracking-wider text-brand-700">
             {badge}
           </span>
         ) : null}
@@ -88,7 +88,7 @@ export function Toggle({
         <span className="min-w-0">
           <span className="block text-xs font-bold text-foreground">{label}</span>
           {hint ? (
-            <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
+            <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">
               {hint}
             </span>
           ) : null}

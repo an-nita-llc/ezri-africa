@@ -39,7 +39,7 @@ export function Sidebar() {
         </Link>
         <Link
           href="/"
-          className="text-lg font-bold tracking-tight text-annita-navy-900"
+          className="text-lg font-bold tracking-tight text-foreground"
         >
           Ezri Africa
         </Link>

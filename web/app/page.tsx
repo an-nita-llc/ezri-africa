@@ -99,16 +99,16 @@ function AgentActivityCard({ run }: { run: { title: string; steps: AgentStep[] }
   return (
     <div className="flex justify-start">
       <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+        <div className="flex items-center gap-2 px-1 text-xs font-bold text-muted-foreground">
           <span>Ezri AI Agent</span>
-          <span className="text-[10px] text-muted-foreground/70">{now()}</span>
+          <span className="text-xs text-muted-foreground/70">{now()}</span>
         </div>
         <div className="rounded-2xl border border-annita-navy-800 bg-annita-navy-950 p-4 font-mono text-xs text-white/90 flex flex-col gap-2.5 shadow-2xs">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
-            <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-brand-300">
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-300">
               <Bot aria-hidden="true" className="size-4" /> {run.title}
             </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-white/50">
+            <span className="flex items-center gap-1.5 text-xs text-white/50">
               <span className="size-1.5 rounded-full bg-annita-green animate-pulse" />
               live
             </span>
@@ -156,9 +156,9 @@ function ApprovalCard({
   return (
     <div className="flex justify-start">
       <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+        <div className="flex items-center gap-2 px-1 text-xs font-bold text-muted-foreground">
           <span>Ezri AI Agent</span>
-          <span className="text-[10px] text-muted-foreground/70">paused</span>
+          <span className="text-xs text-muted-foreground/70">paused</span>
         </div>
         <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-4 text-xs flex flex-col gap-3 shadow-2xs">
           <div className="flex items-center justify-between border-b border-amber-200 pb-2 font-bold">
@@ -168,7 +168,7 @@ function ApprovalCard({
             <span className="text-base font-extrabold text-amber-950">${approval.amount} USD</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 text-xs">
             <div>
               <span className="block font-semibold text-muted-foreground">Action</span>
               <span className="font-extrabold text-foreground">PayPal → escrow hold</span>
@@ -181,7 +181,7 @@ function ApprovalCard({
 
           {!pinStage ? (
             <>
-              <p className="text-[11px] leading-relaxed text-amber-900/80">
+              <p className="text-xs leading-relaxed text-amber-900/80">
                 I will not move money without your approval. Confirm to continue to PIN entry.
               </p>
               <div className="flex flex-wrap gap-2">
@@ -214,8 +214,8 @@ function ApprovalCard({
                   placeholder="••••"
                   className="input text-center font-mono text-xl font-bold tracking-[0.6em]"
                 />
-                {pinError ? <p className="text-[11px] font-bold text-danger">{pinError}</p> : null}
-                <p className="text-[11px] text-muted-foreground">Demo PIN: 1234</p>
+                {pinError ? <p className="text-xs font-bold text-danger">{pinError}</p> : null}
+                <p className="text-xs text-muted-foreground">Demo PIN: 1234</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -252,9 +252,9 @@ function ChatMessageItem({
   return (
     <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
       <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+        <div className="flex items-center gap-2 px-1 text-xs font-bold text-muted-foreground">
           <span>{msg.role === "assistant" ? "Ezri AI" : sessionName}</span>
-          <span className="text-[10px] text-muted-foreground/70">{msg.time}</span>
+          <span className="text-xs text-muted-foreground/70">{msg.time}</span>
         </div>
 
         <div
@@ -276,7 +276,7 @@ function ChatMessageItem({
                 <span className="text-base font-extrabold">${msg.card.amount_usd} USD</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 text-xs">
                 <div>
                   <span className="text-muted-foreground block font-semibold">Sending To</span>
                   <span className="font-extrabold text-foreground capitalize">{msg.card.recipient || "mom"}</span>
@@ -296,7 +296,7 @@ function ChatMessageItem({
                       type="button"
                       onClick={() => onTagChange(t)}
                       aria-pressed={msg.card.tag === t}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${
                         msg.card.tag === t
                           ? "bg-brand-600 text-white"
                           : "bg-surface border border-brand-200 text-brand-700 hover:bg-brand-50"
@@ -646,7 +646,7 @@ export default function PlugPage() {
               Remittance AI
               <Sparkles className="size-3.5 text-brand-600" />
             </h1>
-            <p className="text-[11px] text-muted-foreground">OpenRouter AI Engine</p>
+            <p className="text-xs text-muted-foreground">OpenRouter AI Engine</p>
           </div>
         </div>
 
@@ -711,14 +711,14 @@ export default function PlugPage() {
         {escrow && (
           <div className="flex justify-start">
             <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
-              <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+              <div className="flex items-center gap-2 px-1 text-xs font-bold text-muted-foreground">
                 <span>Ezri AI</span>
-                <span className="text-[10px] text-muted-foreground/70">Escrow</span>
+                <span className="text-xs text-muted-foreground/70">Escrow</span>
               </div>
               <div className="rounded-2xl border border-brand-300 bg-brand-50 p-4 text-foreground text-xs flex flex-col gap-3 shadow-2xs">
                 <div className="flex items-center justify-between border-b border-brand-200 pb-2">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       Step 2 · Escrow Session
                     </span>
                     <p className="font-mono text-xs font-extrabold">{escrow.escrow_id}</p>
@@ -726,7 +726,7 @@ export default function PlugPage() {
                   <span className={statusBadge(escrow.status)}>{escrow.status}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-muted-foreground block font-semibold">Transfer amount</span>
                     <span className="font-extrabold text-foreground">
@@ -795,9 +795,9 @@ export default function PlugPage() {
         {escrow && (escrow.status === "HELD" || escrow.status === "RELEASED") && (
           <div className="flex justify-start">
             <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
-              <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+              <div className="flex items-center gap-2 px-1 text-xs font-bold text-muted-foreground">
                 <span>Ezri AI</span>
-                <span className="text-[10px] text-muted-foreground/70">{now()}</span>
+                <span className="text-xs text-muted-foreground/70">{now()}</span>
               </div>
               <div className="rounded-2xl border border-brand-300 bg-brand-50/70 p-4 text-foreground text-xs flex flex-col gap-3">
                 <div className="flex items-center justify-between border-b border-brand-200 pb-2 font-bold">
@@ -807,7 +807,7 @@ export default function PlugPage() {
                   <span className="text-base font-extrabold">${parsed?.amount_usd ?? 60} USD</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-muted-foreground block font-semibold">Payout Total</span>
                     <span className="font-extrabold text-foreground">
@@ -850,12 +850,12 @@ export default function PlugPage() {
                 </div>
 
                 {escrow.status === "RELEASED" && (
-                  <div className="rounded-xl border border-brand-200 bg-surface px-3 py-2 font-mono text-[11px] font-bold">
+                  <div className="rounded-xl border border-brand-200 bg-surface px-3 py-2 font-mono text-xs font-bold">
                     {escrow.provider} · MoMo Ref: {escrow.mock_momo_txn_id || "—"}
                   </div>
                 )}
 
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {escrow.status === "HELD"
                     ? "Funds are held in PayPal sandbox escrow. Money moves only after the receiver's proof passes."
                     : "Transaction complete. Mobile money released to the receiver."}

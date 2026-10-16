@@ -36,7 +36,7 @@ export function BottomNav() {
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-medium transition-colors ${
+                className={`flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-medium transition-colors ${
                   active
                     ? "text-brand-700 font-bold"
                     : "text-muted-foreground hover:text-foreground"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   Check,
@@ -13,43 +14,28 @@ import {
   Languages,
   Loader2,
   LogOut,
+  Monitor,
+  Moon,
+  Palette,
   Percent,
   ShieldCheck,
   Sparkles,
+  Sun,
   Type,
   UserRound,
 } from "lucide-react";
 import { InfoRow, PageHeader, SectionCard, Toggle } from "@/components/ui/section-card";
 import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf } from "../fx";
 import { clearSession, loadSession, type Session } from "../session";
-
-type Prefs = {
-  requireApproval: boolean;
-  requirePin: boolean;
-  refundApproval: boolean;
-  bigText: boolean;
-  contrast: boolean;
-  simpleMode: boolean;
-  notifyTransfers: boolean;
-  notifyEscrow: boolean;
-  notifyClaims: boolean;
-  provider: string;
-  country: string;
-};
-
-const DEFAULT_PREFS: Prefs = {
-  requireApproval: true,
-  requirePin: true,
-  refundApproval: true,
-  bigText: false,
-  contrast: false,
-  simpleMode: false,
-  notifyTransfers: true,
-  notifyEscrow: true,
-  notifyClaims: true,
-  provider: "Lonestar Cell (MTN) MoMo",
-  country: "Liberia",
-};
+import {
+  DEFAULT_PREFS,
+  readPrefs,
+  savePrefs,
+  type FontFamilyPref,
+  type FontScalePref,
+  type Prefs,
+  type ThemePref,
+} from "../prefs";
 
 const PROVIDERS = [
   "Lonestar Cell (MTN) MoMo",
@@ -73,23 +59,12 @@ const PAYOUT_COUNTRIES = [
   "Other",
 ];
 
-const PREFS_KEY = "ezri:prefs";
-
-function readPrefs(): Prefs {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return DEFAULT_PREFS;
-    return { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<Prefs>) };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
 export function SettingsContent() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     void loadSession().then((s) => {
@@ -99,26 +74,17 @@ export function SettingsContent() {
       }
       setSession(s);
       setPrefs(readPrefs());
+      setLoaded(true);
       setLoading(false);
     });
   }, [router]);
 
-  // Persist preferences + apply accessibility attributes app-wide.
+  // Persist preferences + apply theme/typography app-wide. Gated on `loaded`
+  // so opening Settings never clobbers what was saved on a previous visit.
   useEffect(() => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-    } catch {}
-    if (prefs.bigText) {
-      document.documentElement.setAttribute("data-font-scale", "big");
-    } else {
-      document.documentElement.removeAttribute("data-font-scale");
-    }
-    if (prefs.contrast) {
-      document.documentElement.setAttribute("data-contrast", "true");
-    } else {
-      document.documentElement.removeAttribute("data-contrast");
-    }
-  }, [prefs]);
+    if (!loaded) return;
+    savePrefs(prefs);
+  }, [prefs, loaded]);
 
   const set = <K extends keyof Prefs>(key: K, value: Prefs[K]) =>
     setPrefs((p) => ({ ...p, [key]: value }));
@@ -267,7 +233,7 @@ export function SettingsContent() {
             highlight
           />
         </div>
-        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-[11px] leading-4 text-brand-800">
+        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-xs leading-4 text-brand-800">
           <Percent aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-brand-600" />
           <span>
             Applied automatically on every PayPal capture and shown in the chat approval card, the
@@ -302,15 +268,54 @@ export function SettingsContent() {
         />
       </SectionCard>
 
+      {/* Appearance — theme + typography, applied live and persisted */}
+      <SectionCard title="Appearance" icon={Palette} badge="Applies instantly">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold text-foreground">Theme</span>
+          <Segmented<ThemePref>
+            value={prefs.theme}
+            onChange={(v) => set("theme", v)}
+            options={[
+              { value: "system", label: "System", icon: Monitor },
+              { value: "light", label: "Light", icon: Sun },
+              { value: "dark", label: "Dark", icon: Moon },
+            ]}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold text-foreground">Text size</span>
+          <Segmented<FontScalePref>
+            value={prefs.fontScale}
+            onChange={(v) => set("fontScale", v)}
+            options={[
+              { value: "compact", label: "Compact" },
+              { value: "default", label: "Default" },
+              { value: "big", label: "Big" },
+              { value: "xl", label: "Extra large" },
+            ]}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold text-foreground">Font</span>
+          <Segmented<FontFamilyPref>
+            value={prefs.fontFamily}
+            onChange={(v) => set("fontFamily", v)}
+            options={[
+              { value: "default", label: "App default" },
+              { value: "legible", label: "Legible" },
+              { value: "mono", label: "Monospace" },
+            ]}
+          />
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Every screen is fluid and mobile-first: type scales with the device
+          width and with your size preference, so it always fits — from 320px
+          phones to desktop. Choices persist on this device.
+        </p>
+      </SectionCard>
+
       {/* Accessibility */}
       <SectionCard title="Accessibility" icon={Type} badge="Adaptive">
-        <Toggle
-          checked={prefs.bigText}
-          onChange={(v) => set("bigText", v)}
-          icon={Type}
-          label="Dynamic big text"
-          hint="Scales the whole app text up for easier reading."
-        />
         <Toggle
           checked={prefs.contrast}
           onChange={(v) => set("contrast", v)}
@@ -353,12 +358,54 @@ export function SettingsContent() {
             </span>
           </div>
         </div>
-        <p className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-[11px] leading-4 text-brand-800">
+        <p className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-xs leading-4 text-brand-800">
           <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand-600" />
           PayPal sandbox becomes live as soon as client keys are set; everything else stays
           deterministic so judges can run the demo with zero configuration.
         </p>
       </SectionCard>
+    </div>
+  );
+}
+
+/** Compact segmented control used by the Appearance settings. */
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; icon?: LucideIcon }[];
+}) {
+  return (
+    <div
+      role="radiogroup"
+      className={`grid gap-1.5 ${
+        options.length > 3 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"
+      }`}
+    >
+      {options.map((o) => {
+        const active = o.value === value;
+        const Icon = o.icon;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.value)}
+            className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl border px-2 text-xs font-bold transition-all ${
+              active
+                ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs"
+                : "border-border bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            {Icon ? <Icon aria-hidden="true" className="size-3.5 shrink-0" /> : null}
+            <span className="truncate">{o.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -107,7 +107,7 @@ export default function ClaimHubPage() {
               required
             />
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Example ID:{" "}
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">EZR-982F1B</code>{" "}
             — the full link looks like <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">…/claim/EZR-982F1B</code>
@@ -124,7 +124,7 @@ export default function ClaimHubPage() {
         <ol className="flex flex-col gap-2.5 text-xs leading-5">
           {STEPS.map((s, i) => (
             <li key={s.title} className="flex items-start gap-3">
-              <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-extrabold text-white">
+              <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
                 {i + 1}
               </span>
               <span>
@@ -218,7 +218,7 @@ export default function ClaimHubPage() {
           <InfoRow label="Escrow holder" value="PayPal (sandbox in demo)" mono />
           <InfoRow label="Auto-refund window" value="48 hours (production)" mono />
         </div>
-        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-[11px] leading-4 text-brand-800">
+        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-xs leading-4 text-brand-800">
           <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-brand-600" />
           <span>
             Your claim link is the only credential for this transfer — never share it publicly. The

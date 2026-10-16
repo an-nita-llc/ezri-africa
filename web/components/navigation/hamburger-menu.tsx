@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { clearSession, loadSession, type Session } from "@/app/session";
+import { DEFAULT_PREFS, readPrefs, savePrefs, type Prefs } from "@/app/prefs";
 
 export function HamburgerMenu({
   onVoiceClick,
@@ -34,15 +35,14 @@ export function HamburgerMenu({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
-  const [bigText, setBigText] = useState(false);
-  const [contrast, setContrast] = useState(false);
-  const [simpleMode, setSimpleMode] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
+    setPrefs(readPrefs());
     void loadSession().then(setSession);
   }, [pathname]);
 
@@ -63,22 +63,12 @@ export function HamburgerMenu({
     };
   }, [open]);
 
-  // Sync Accessibility Attributes on Document Body
-  useEffect(() => {
-    if (bigText) {
-      document.documentElement.setAttribute("data-font-scale", "big");
-    } else {
-      document.documentElement.removeAttribute("data-font-scale");
-    }
-  }, [bigText]);
-
-  useEffect(() => {
-    if (contrast) {
-      document.documentElement.setAttribute("data-contrast", "true");
-    } else {
-      document.documentElement.removeAttribute("data-contrast");
-    }
-  }, [contrast]);
+  // Persist + apply a partial preference change (text size, contrast, …).
+  function updatePrefs(patch: Partial<Prefs>) {
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    savePrefs(next);
+  }
 
   async function handleLogout() {
     await clearSession();
@@ -128,7 +118,7 @@ export function HamburgerMenu({
         <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6">
           {/* Navigation Links */}
           <div>
-            <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
               Navigation
             </p>
             <ul className="flex flex-col gap-1.5">
@@ -207,7 +197,7 @@ export function HamburgerMenu({
                 <Sliders className="size-4 text-brand-600" />
                 Preferences & Accessibility
               </span>
-              <span className="text-[10px] font-bold uppercase text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
+              <span className="text-xs font-bold uppercase text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
                 Adaptive
               </span>
             </div>
@@ -227,16 +217,20 @@ export function HamburgerMenu({
                     <Mic className="size-4 text-brand-600" />
                     Voice Assistant
                   </span>
-                  <span className="text-[11px] font-bold text-brand-700">Tap to Speak</span>
+                  <span className="text-xs font-bold text-brand-700">Tap to Speak</span>
                 </button>
               )}
 
               {/* Big Text Scaling */}
               <button
                 type="button"
-                onClick={() => setBigText(!bigText)}
+                onClick={() =>
+                  updatePrefs({
+                    fontScale: prefs.fontScale !== "default" ? "default" : "big",
+                  })
+                }
                 className={`flex items-center justify-between rounded-xl border p-3 text-xs font-semibold transition-all text-left ${
-                  bigText
+                  prefs.fontScale !== "default"
                     ? "border-brand-600 bg-brand-50 text-brand-700"
                     : "border-border bg-surface text-foreground hover:bg-muted"
                 }`}
@@ -245,15 +239,17 @@ export function HamburgerMenu({
                   <Type className="size-4 text-brand-600" />
                   Dynamic Big Text
                 </span>
-                {bigText && <Check className="size-4 text-brand-700" />}
+                {prefs.fontScale !== "default" && (
+                  <Check className="size-4 text-brand-700" />
+                )}
               </button>
 
               {/* High Contrast */}
               <button
                 type="button"
-                onClick={() => setContrast(!contrast)}
+                onClick={() => updatePrefs({ contrast: !prefs.contrast })}
                 className={`flex items-center justify-between rounded-xl border p-3 text-xs font-semibold transition-all text-left ${
-                  contrast
+                  prefs.contrast
                     ? "border-brand-600 bg-brand-50 text-brand-700"
                     : "border-border bg-surface text-foreground hover:bg-muted"
                 }`}
@@ -262,15 +258,15 @@ export function HamburgerMenu({
                   <Contrast className="size-4 text-brand-600" />
                   High Contrast Mode
                 </span>
-                {contrast && <Check className="size-4 text-brand-700" />}
+                {prefs.contrast && <Check className="size-4 text-brand-700" />}
               </button>
 
               {/* Simple Words */}
               <button
                 type="button"
-                onClick={() => setSimpleMode(!simpleMode)}
+                onClick={() => updatePrefs({ simpleMode: !prefs.simpleMode })}
                 className={`flex items-center justify-between rounded-xl border p-3 text-xs font-semibold transition-all text-left ${
-                  simpleMode
+                  prefs.simpleMode
                     ? "border-brand-600 bg-brand-50 text-brand-700"
                     : "border-border bg-surface text-foreground hover:bg-muted"
                 }`}
@@ -279,7 +275,7 @@ export function HamburgerMenu({
                   <Languages className="size-4 text-brand-600" />
                   Simple Language Mode
                 </span>
-                {simpleMode && <Check className="size-4 text-brand-700" />}
+                {prefs.simpleMode && <Check className="size-4 text-brand-700" />}
               </button>
             </div>
           </div>
@@ -331,7 +327,7 @@ export function HamburgerMenu({
         aria-expanded={open}
         className="flex size-11 items-center justify-center rounded-2xl border border-border bg-surface text-foreground shadow-xs hover:bg-muted active:scale-95 transition-all cursor-pointer"
       >
-        <Menu aria-hidden="true" className="size-5 text-annita-navy-900" />
+        <Menu aria-hidden="true" className="size-5 text-foreground" />
       </button>
 
       {open && mounted && createPortal(menuContent, document.body)}

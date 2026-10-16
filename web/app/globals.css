@@ -1,57 +1,127 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ *
+ * Theme architecture (Fortune-500 style design tokens)
+ *
+ * 1. Every color the UI uses resolves through a CSS custom property.
+ * 2. <html data-theme="light|dark"> swaps the token values in one place,
+ *    so every utility class (bg-surface, text-brand-700, border-amber-300,
+ *    …) re-themes without per-element dark: variants.
+ * 3. <html data-font-scale / data-font-family / data-contrast>, driven by
+ *    Settings → Appearance, adjusts typography per device with no
+ *    hard-coded pixel sizes anywhere in the app.
+ * 4. The type scale is fluid (clamp between 320px → 1440px viewports) and
+ *    multiplied by --font-scale, so text always fits the current device
+ *    AND the user's size preference at the same time.
+ * ------------------------------------------------------------------ */
+
+/* Class-based dark variant for the rare element-level dark: utility. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
+  color-scheme: light;
+
+  /* Semantic surface tokens */
   --background: #f8fafc;
   --foreground: #0f172a;
   --surface: #ffffff;
   --muted: #f1f5f9;
   --muted-foreground: #475569;
   --border: #e2e8f0;
-  --font-scale: 1;
+  --danger: #b91c1c;
 
+  /* Typography */
+  --font-scale: 1;
   --font-sans: var(--font-geist-sans, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif);
   --font-mono: var(--font-geist-mono, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace);
+
+  /* Brand palette (orange) — runtime-swappable */
+  --brand-50: #fff7ed;
+  --brand-100: #ffedd5;
+  --brand-200: #fed7aa;
+  --brand-300: #fdba74;
+  --brand-400: #fb923c;
+  --brand-500: #f97316;
+  --brand-600: #ea580c;
+  --brand-700: #c2410c;
+  --brand-800: #9a3412;
+  --brand-900: #7c2d12;
+  --brand-950: #431407;
+
+  /* Annita One palette */
+  --annita-navy-50: #eef3f9;
+  --annita-navy-100: #d9e4f1;
+  --annita-navy-200: #b3c9e2;
+  --annita-navy-600: #0b4d8f;
+  --annita-navy-700: #084074;
+  --annita-navy-800: #063058;
+  --annita-navy-900: #042441;
+  --annita-navy-950: #02182c;
+  --annita-navy: #003868;
+  --annita-green: #00a651;
+  --annita-green-dark: #007a3d;
+  --annita-purple: #4b0080;
+  --annita-orange: #f26522;
 }
 
-/* Dynamic Font Scaling for Big Text / Accessibility mode */
+/* Text-size presets — set from Settings → Appearance (and the drawer). */
+html[data-font-scale="compact"] {
+  --font-scale: 0.95;
+}
 html[data-font-scale="big"] {
   --font-scale: 1.15;
 }
+html[data-font-scale="xl"] {
+  --font-scale: 1.3;
+}
+
+/* Font-family presets — system-safe stacks only (no downloads, offline OK). */
+html[data-font-family="legible"] {
+  --font-sans: Verdana, Geneva, Tahoma, sans-serif;
+}
+html[data-font-family="mono"] {
+  --font-sans: var(--font-mono);
+}
 
 @theme inline {
+  /* Semantic tokens resolve through :root so [data-theme] can swap them */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
-  --color-danger: #b91c1c;
-  --color-annita-navy-50: #eef3f9;
-  --color-annita-navy-100: #d9e4f1;
-  --color-annita-navy-200: #b3c9e2;
-  --color-annita-navy-600: #0b4d8f;
-  --color-annita-navy-700: #084074;
-  --color-annita-navy-800: #063058;
-  --color-annita-navy-900: #042441;
-  --color-annita-navy-950: #02182c;
-  --color-annita-navy: #003868;
-  --color-annita-green: #00a651;
-  --color-annita-green-dark: #007a3d;
-  --color-annita-purple: #4b0080;
-  --color-annita-orange: #f26522;
-  --color-brand-50: #fff7ed;
-  --color-brand-100: #ffedd5;
-  --color-brand-200: #fed7aa;
-  --color-brand-300: #fdba74;
-  --color-brand-400: #fb923c;
-  --color-brand-500: #f97316;
-  --color-brand-600: #ea580c;
-  --color-brand-700: #c2410c;
-  --color-brand-800: #9a3412;
-  --color-brand-900: #7c2d12;
-  --color-brand-950: #431407;
+  --color-danger: var(--danger);
 
-  /* Fortune 500 Fluid Responsive Typography Scale (320px -> 1440px) */
+  /* Brand palette via indirection (utilities embed var(--brand-*) themselves) */
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+
+  /* Annita palette via indirection */
+  --color-annita-navy-50: var(--annita-navy-50);
+  --color-annita-navy-100: var(--annita-navy-100);
+  --color-annita-navy-200: var(--annita-navy-200);
+  --color-annita-navy-600: var(--annita-navy-600);
+  --color-annita-navy-700: var(--annita-navy-700);
+  --color-annita-navy-800: var(--annita-navy-800);
+  --color-annita-navy-900: var(--annita-navy-900);
+  --color-annita-navy-950: var(--annita-navy-950);
+  --color-annita-navy: var(--annita-navy);
+  --color-annita-green: var(--annita-green);
+  --color-annita-green-dark: var(--annita-green-dark);
+  --color-annita-purple: var(--annita-purple);
+  --color-annita-orange: var(--annita-orange);
+
+  /* Fluid Responsive Typography Scale (320px -> 1440px), user-scaled */
   --text-xs: clamp(calc(0.72rem * var(--font-scale)), calc(0.7rem * var(--font-scale)) + 0.1vw, calc(0.8125rem * var(--font-scale)));
   --text-xs--line-height: 1.35;
 
@@ -77,6 +147,96 @@ html[data-font-scale="big"] {
   --text-4xl--line-height: 1.15;
 }
 
+/* ------------------------------------------------------------------ *
+ * Dark theme — one token swap re-themes the entire app.
+ * Light ends (50–300) become dark tinted panels/borders; mid tones
+ * (400–600) keep brand identity so gradients, dots and white-on-color
+ * buttons stay identical in both themes; dark text ends (700–900) would
+ * go light where they are text-only (see corrections block below).
+ * ------------------------------------------------------------------ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #0b111c;
+  --foreground: #e8eef7;
+  --surface: #131b29;
+  --muted: #1c2637;
+  --muted-foreground: #9fb0c6;
+  --border: #2a3750;
+  --danger: #f87171;
+
+  /* Brand: light tints only — buttons/gradients keep brand orange */
+  --brand-50: #2b1810;
+  --brand-100: #3a2317;
+  --brand-200: #573826;
+  --brand-300: #7a5033;
+
+  /* Annita navy: active pills lift off dark surfaces; deep panels stay */
+  --annita-navy-900: #0b4d8f;
+
+  /* Stock status palettes: Tailwind utilities read var(--color-*), so
+     overriding here re-themes every amber/emerald/rose/orange/yellow
+     tint in the app. Text-only ends (700–900) go light. */
+  --color-amber-50: #2b2207;
+  --color-amber-100: #3a2d0a;
+  --color-amber-200: #55431a;
+  --color-amber-300: #7a5f28;
+  --color-amber-700: #fbbf24;
+  --color-amber-800: #fcd34d;
+  --color-amber-900: #fde68a;
+
+  --color-emerald-50: #0a2a1e;
+  --color-emerald-100: #0f3a2a;
+  --color-emerald-200: #1b5540;
+  --color-emerald-300: #245c46;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-emerald-900: #d1fae5;
+
+  --color-rose-50: #2d141b;
+  --color-rose-100: #3d1c25;
+  --color-rose-200: #5e2f3c;
+  --color-rose-300: #7d4050;
+  --color-rose-700: #fda4af;
+  --color-rose-800: #fecdd3;
+  --color-rose-900: #ffe4e6;
+
+  --color-orange-50: #2b1a0c;
+  --color-orange-100: #3a2412;
+  --color-orange-200: #573820;
+  --color-orange-300: #7a5030;
+  --color-orange-700: #fdba74;
+  --color-orange-800: #fed7aa;
+  --color-orange-900: #ffedd5;
+
+  --color-yellow-50: #2e2707;
+  --color-yellow-100: #3d340a;
+  --color-yellow-200: #574c14;
+  --color-yellow-300: #7a6a1f;
+}
+
+/* ------------------------------------------------------------------ *
+ * Dark-mode text corrections.
+ * Some shades are shared by a background use (must stay dark behind
+ * white text, e.g. hover:bg-brand-700, bg-emerald-600 icon tiles) and a
+ * text use (must go light on dark panels). Unlayered rules beat
+ * Tailwind's layered utilities, so these win without touching markup.
+ * ------------------------------------------------------------------ */
+[data-theme="dark"] .text-brand-300,
+[data-theme="dark"] .text-brand-700 {
+  color: #fdba74;
+}
+[data-theme="dark"] .text-brand-800 {
+  color: #fed7aa;
+}
+[data-theme="dark"] .text-brand-900,
+[data-theme="dark"] .text-brand-950 {
+  color: #ffedd5;
+}
+[data-theme="dark"] .text-emerald-600 {
+  color: #34d399;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -87,6 +247,14 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-wrap: break-word;
+}
+
+/* Titles wrap as a balanced block instead of jamming one long line. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 select {
@@ -111,14 +279,14 @@ select {
 }
 
 select:hover {
-  border-color: var(--color-brand-300);
+  border-color: var(--brand-300);
 }
 
 select:focus-visible {
   outline: none;
-  border-color: var(--color-brand-600);
+  border-color: var(--brand-600);
   box-shadow:
-    0 0 0 1px var(--color-brand-600),
+    0 0 0 1px var(--brand-600),
     0 0 0 4px rgb(234 88 12 / 0.15);
 }
 
@@ -238,8 +406,8 @@ select option:disabled {
   }
 }
 
-/* High contrast mode theme override */
-[data-contrast="true"] {
+/* High contrast mode — declared last so it wins over both themes. */
+html[data-contrast="true"] {
   --background: #000000;
   --surface: #0f0f0f;
   --muted: #1c1c1e;

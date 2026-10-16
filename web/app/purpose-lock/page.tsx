@@ -220,7 +220,7 @@ export default function PurposeLockPage() {
                     {selected ? (
                       <Check aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
                     ) : (
-                      <span className="rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                      <span className="rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-xs font-bold text-muted-foreground">
                         {t.id}
                       </span>
                     )}
@@ -278,7 +278,7 @@ export default function PurposeLockPage() {
           <InfoRow label="Minimum photo size" value="5 KB (blurry/too small = FAIL)" mono />
           <InfoRow label="Verdict" value="Instant PASS / FAIL with reason" highlight />
         </div>
-        <p className="text-[11px] leading-4 text-muted-foreground">
+        <p className="text-xs leading-4 text-muted-foreground">
           The receiver sees the exact FAIL reason on the claim page, so retries are guided instead of
           silent. Production swaps the heuristic check for a Qwen vision model — the contract stays
           the same: strict PASS/FAIL + reason, never a maybe.
@@ -303,7 +303,7 @@ export default function PurposeLockPage() {
               </option>
             ))}
           </select>
-          <p className="text-[11px] leading-4 text-muted-foreground">{expiryOption.detail}</p>
+          <p className="text-xs leading-4 text-muted-foreground">{expiryOption.detail}</p>
         </div>
         <Toggle
           checked={autoRefund}
@@ -333,7 +333,7 @@ export default function PurposeLockPage() {
           <InfoRow label="Maximum transfer" value="$2,000.00 per transaction" mono />
         </div>
         <InfoRow label="Live FX rate" value={`1 USD = ${USD_LRD} LRD (no hidden markup)`} mono highlight />
-        <p className="text-[11px] leading-4 text-muted-foreground">
+        <p className="text-xs leading-4 text-muted-foreground">
           The fee is added to the PayPal charge and shown in the approval card before you confirm —
           the agent never moves money without showing it. Refunds always return the full amount
           charged, fee included.
@@ -383,7 +383,7 @@ export default function PurposeLockPage() {
               : "Auto-refund is off — funds stay held until you refund manually from the ledger.",
           ].map((step, i) => (
             <li key={i} className="flex items-start gap-2.5">
-              <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[10px] font-extrabold text-white">
+              <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
                 {i + 1}
               </span>
               <span>{step}</span>

@@ -309,7 +309,7 @@ export default function ClaimPage() {
             ["AI verdict in seconds", "PASS releases the payout instantly. FAIL keeps funds held and tells you exactly why."],
           ].map(([title, detail], i) => (
             <li key={title} className="flex items-start gap-3">
-              <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-extrabold text-white">
+              <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
                 {i + 1}
               </span>
               <span>
@@ -319,7 +319,7 @@ export default function ClaimPage() {
             </li>
           ))}
         </ol>
-        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-[11px] leading-4 text-brand-800">
+        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-xs leading-4 text-brand-800">
           <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-brand-600" />
           <span>
             <strong>What the AI looks for:</strong> the photo must reference{" "}
@@ -349,7 +349,7 @@ export default function ClaimPage() {
             <InfoRow label="Account phone" value={escrow.provider_number || "—"} mono />
             <InfoRow label="MoMo reference" value={escrow.mock_momo_txn_id || "—"} mono highlight />
           </div>
-          <p className="text-[11px] leading-4 text-muted-foreground">
+          <p className="text-xs leading-4 text-muted-foreground">
             Funds went directly to the mobile money account above. Keep the reference for your
             records — the sender can see the same receipt in their ledger.
           </p>
@@ -408,13 +408,13 @@ export default function ClaimPage() {
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <span
-                        className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-[11px] font-extrabold ${p.badgeClass}`}
+                        className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold ${p.badgeClass}`}
                       >
                         {p.badge}
                       </span>
                       <div className="min-w-0">
                         <span className="block text-sm font-bold text-foreground">{p.name}</span>
-                        <span className="block truncate text-[11px] text-muted-foreground">{p.hint}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{p.hint}</span>
                       </div>
                     </div>
                     {selected ? (
@@ -446,7 +446,7 @@ export default function ClaimPage() {
                   required
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Enter the number registered to you — the LRD payout is released here the moment the
                 proof passes. USD value: {lrdOf(amount).toLocaleString()} LRD at 1 USD = {USD_LRD} LRD.
               </p>
@@ -463,7 +463,7 @@ export default function ClaimPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-bold text-foreground">{file?.name}</p>
-                    <p className="font-mono text-[11px] text-muted-foreground">
+                    <p className="font-mono text-xs text-muted-foreground">
                       {file ? (file.size / 1024).toFixed(1) : 0} KB ·{" "}
                       {(file?.size || 0) >= 5000 ? "Ready for AI inspection" : "Too small — retake closer to the bill"}
                     </p>
@@ -486,7 +486,7 @@ export default function ClaimPage() {
                     <UploadCloud aria-hidden="true" className="size-6" />
                   </div>
                   <span className="text-xs font-bold text-foreground">Tap or drag your bill / invoice photo</span>
-                  <span className="mt-0.5 text-[11px] text-muted-foreground">
+                  <span className="mt-0.5 text-xs text-muted-foreground">
                     PNG, JPG or WEBP · at least 5 KB · must reference the {escrow.tag} purpose
                   </span>
                   <input
@@ -510,7 +510,7 @@ export default function ClaimPage() {
                   placeholder={escrow.tag === "SCHOOL" ? "e.g. Tuition receipt #1042" : "e.g. Invoice #1042"}
                   className="input text-xs"
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Tip: words like{" "}
                   <code className="rounded bg-muted px-1 font-mono text-foreground">
                     {keywords.slice(0, 3).join(", ")}
