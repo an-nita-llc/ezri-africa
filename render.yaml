@@ -4,15 +4,23 @@ services:
     runtime: python
     buildCommand: "pip install -r api/requirements.txt"
     startCommand: "uvicorn server:app --app-dir api --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
     envVars:
       - key: PAYPAL_BASE_URL
         value: https://api-m.sandbox.paypal.com
       - key: DEMO_EXPIRY_MINUTES
         value: 10
+      # After first deploy, add in dashboard: CORS_ALLOWED_ORIGINS (web URL),
+      # PAYPAL_CLIENT_ID / PAYPAL_SECRET (sandbox), OPENROUTER_API_KEY (optional).
   - type: web
     name: ezri-web
     runtime: node
-    buildCommand: "cd web && pnpm install --frozen-lockfile && pnpm run build"
-    startCommand: "cd web && pnpm run start"
-    # Set in Render dashboard after first deploy (baked at build time):
+    buildCommand: "cd web && corepack enable && pnpm install --frozen-lockfile && pnpm run build"
+    # Must bind Render's dynamic $PORT (package.json start hardcodes 3000 for local dev).
+    startCommand: "cd web && ./node_modules/.bin/next start -p $PORT"
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+    # Set in Render dashboard BEFORE (re)deploy — baked at build time:
     # NEXT_PUBLIC_API_URL=https://ezri-api.onrender.com
+    # CORS_ALLOWED_ORIGINS (on ezri-api) must then allow https://ezri-web.onrender.com
