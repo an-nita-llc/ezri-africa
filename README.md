@@ -232,6 +232,29 @@ No code changes needed — the app ships with title, version (`0.1.0`), contact 
 
 ---
 
+## MCP tool server — agentic commerce (PayPal Agent Toolkit pattern)
+
+`api/mcp_tools.py` is a Model Context Protocol server (stdio) exposing the escrow lifecycle as agent-callable tools — the machine-readable twin of the REST API. An agent doesn't just recommend; it transacts, under the same approval philosophy as the chat: **read-only tools are free, every money tool requires the sender's 4-digit money PIN** (demo `1234` via `EZRI_MONEY_PIN`; wrong PIN returns a plain error, money never moves).
+
+| Tool | PIN? | What it does |
+|---|---|---|
+| `propose_transfer` | No | Parse natural language → tag, amount, 2% fee, fraud score (read-only) |
+| `create_escrow_transfer` | Yes | Purpose-lock escrow + PayPal order (no capture yet) |
+| `capture_held_funds` | Yes | Capture → HELD escrow lock |
+| `get_escrow_status` | No | Read current state (claims visibility for agents) |
+| `release_after_override` | Yes | Release after FAIL + human reason |
+| `refund_escrow` | Yes | Refund amount + fee |
+
+```bash
+cd api && python mcp_tools.py   # stdio server (local; Render hosts API+web)
+```
+
+- **MCP Inspector:** `npx @modelcontextprotocol/inspector python api/mcp_tools.py` → list tools, call `propose_transfer`, step the lifecycle.
+- **Claude Desktop:** add to `claude_desktop_config.json`: `{"mcpServers": {"ezri": {"command": "python", "args": ["D:/AnnitaPlug/hackathon/ezri-africa/api/mcp_tools.py"]}}}`.
+- Verified live over the protocol: 6/6 tools listed, remote `propose_transfer("Send $60 to mom for school")` → `transfer/SCHOOL/$60/$1.20/$61.20/fraud 10`. pytest suite covers the PIN gates + full agent lifecycle (16 passed).
+
+---
+
 ## Pages
 
 | Route | Audience | What happens |
