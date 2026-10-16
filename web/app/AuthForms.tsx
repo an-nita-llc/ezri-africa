@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, Lock, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authButtonClass, authInputClass } from "@/components/auth/classes";
@@ -215,58 +215,6 @@ export function OtpSignInForm() {
   );
 }
 
-export function OneTapDemoButton() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function signInWithDemo() {
-    setError(null);
-    setPending(true);
-    try {
-      const j = await post("/api/auth/demo", {});
-      if (!j.token || !j.user) {
-        setError("Demo login didn't complete. Try again or create an account.");
-        setPending(false);
-        return;
-      }
-      await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
-      router.push("/");
-      router.refresh();
-    } catch {
-      setError("No connection to the API. Start the API server and try again.");
-      setPending(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      {error ? <ErrorAlert message={error} /> : null}
-      <button
-        type="button"
-        onClick={() => void signInWithDemo()}
-        disabled={pending}
-        className="btn btn-secondary btn-lg hover:border-brand-300 hover:bg-brand-50"
-      >
-        {pending ? (
-          <>
-            <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
-            Preparing your demo session…
-          </>
-        ) : (
-          <>
-            <Zap aria-hidden="true" className="size-5 text-brand-600" />
-            Continue with one-tap demo
-          </>
-        )}
-      </button>
-      <p className="text-center text-xs leading-5 text-muted-foreground">
-        No password needed — creates a demo sender instantly for judges.
-      </p>
-    </div>
-  );
-}
-
 export function PasskeySignInButton() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -386,7 +334,6 @@ export function SignInTabs() {
         {method === "password" ? <LoginForm /> : <OtpSignInForm />}
       </div>
       <PasskeySignInButton />
-      <OneTapDemoButton />
       <p className="text-center text-sm text-muted-foreground">
         New to Ezri?{" "}
         <Link href="/signup" className="font-semibold text-brand-700 hover:underline">
