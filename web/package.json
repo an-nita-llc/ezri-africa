@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bryntum/scheduler": "npm:@bryntum/scheduler-trial",
     "ag-grid-community": "^32.3.3",
     "ag-grid-react": "^32.3.3",
     "clsx": "^2.1.1",

@@ -113,7 +113,8 @@ sequenceDiagram
 - Mobile-first grids stack before they jam; 4-item bottom nav, sidebar on wide screens, safe-area aware, `prefers-reduced-motion` respected, keyboard + screen-reader labeled.
 
 ### Ledger & visibility
-- AG Grid transfers ledger with **natural-language filtering** ("show risky sends?"), status pills, fee columns and KPIs.
+- AG Grid transfers table with sorting, pagination and row→card jump, plus natural-language filtering ("show risky sends?"), status pills, fee columns and KPIs.
+- Bryntum Scheduler escrow timeline: every transfer as a bar from creation to its refund deadline, stacked in purpose lanes and colored by live status.
 - Claim hub + claim detail pages, purpose-lock configuration, full app settings.
 
 ---
@@ -126,6 +127,7 @@ sequenceDiagram
 | UI | **React 19.3** · **Tailwind CSS 4.3** · lucide-react | Design tokens in `globals.css` |
 | Language | **TypeScript 5.9** | `pnpm run typecheck` clean |
 | Data/validation | zod 4 · idb-keyval (offline outbox) | AG Grid 32 for the ledger |
+| Timeline | **Bryntum Scheduler 7 (45-day trial)** | Escrow radar: purpose lanes, refund-deadline bars, status colors |
 | API | **FastAPI 0.115** + Uvicorn · Pydantic 2 · httpx | `python-multipart` for photo prove |
 | Store | **SQLite** (file) | escrows, users, proofs; `pytest` suite |
 | Payments | **PayPal Orders v2** create/capture · **Refunds** · Webhooks | Mock mode when keys unset |
@@ -261,7 +263,7 @@ cd api && python mcp_tools.py   # stdio server (local; Render hosts API+web)
 |---|---|---|
 | `/login`, `/signup`, `/verify-otp` | Sender | Any-credential demo, passkey, OTP, full signup fields |
 | `/` | Sender | AI chat: 3-step cards, live agent terminal, approve → PIN gates |
-| `/dashboard` | Sender | AG Grid ledger, KPIs with fees, NL filter, refund/override actions |
+| `/dashboard` | Sender | Cards/Table/Timeline ledger views, KPIs with fees, NL filter, refund/override actions |
 | `/purpose-lock` | Sender | Tag rules, approval prefs, expiry, fees & limits |
 | `/settings` | Sender | Account, approvals, fees, appearance (theme/text/font), notifications |
 | `/claim`, `/claim/[id]` | **Receiver (no login)** | Transfer details, provider pick, bill photo, PASS/FAIL, safety rules |
@@ -299,9 +301,9 @@ cd web && pnpm run build       # production build (14 routes)
 
 ## Devpost resources & tracks
 
-- **PayPal:** REST Orders v2 + Payments Refunds (sandbox), Checkout approval link, Webhooks receiver, Developer Dashboard.
-- **Sponsors:** AG Grid (live ledger + ask-filter), Render (hosting), Postman (collection). Others (Channel3/Bryntum/Elastic/APIMatic/Astropods/KERNEL/Zapier) skipped deliberately — no fit for prove-first P2P.
-- **Tracks:** **Social Impact** first (inclusion + accessibility), **Money Movement** second.
+- **PayPal:** REST Orders v2 + Payments Refunds (sandbox), Checkout approval link, Webhooks receiver, Developer Dashboard. Agent pattern follows the PayPal Agent Toolkit / MCP model (own MCP tool server with PIN-gated tools).
+- **Sponsors:** AG Grid (transfers table: sorting, pagination, row→card jump), Bryntum Scheduler trial (escrow timeline: purpose lanes, refund-deadline bars, status colors), Render (hosting), Postman (collection), Zapier (event webhook → Catch Hook automations), APIMatic (OpenAPI portal + SDK). Deliberately skipped: Channel3 (shopping API — scope has no catalog), Elastic (heavy infra; NL filter runs local), KERNEL (browser automation — our agent is API-native), Astropods (agent deploy platform — we ship on Render).
+- **Tracks:** **Social Impact** first (inclusion + accessibility), **Money Movement** second. Also fits: AI Agents or Automation (agent transacts with approval + PIN gates, MCP tools), Consumer Experiences (simpler flow for families).
 
 ## Roadmap
 

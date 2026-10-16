@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
+  CalendarRange,
   Check,
   CheckCircle2,
   Clock,
@@ -14,6 +16,7 @@ import {
   ExternalLink,
   Filter,
   History,
+  List,
   Lock,
   RefreshCw,
   RotateCcw,
@@ -21,12 +24,40 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Table,
   TrendingUp,
   Wallet,
   Zap,
 } from "lucide-react";
 import { FEE_PCT_LABEL, feeOf, lrdOf, totalOf } from "../fx";
 import { authHeaders, loadSession, type Session } from "../session";
+import { buildTimelineModel, STATUS_LEGEND } from "./timeline-model";
+
+const EscrowTimeline = dynamic(
+  () =>
+    import("@/components/ledger/escrow-timeline").then((m) => m.EscrowTimeline),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="py-16 text-center text-sm font-semibold text-muted-foreground">
+        Opening escrow timeline…
+      </p>
+    ),
+  }
+);
+
+const LedgerTableView = dynamic(
+  () =>
+    import("@/components/ledger/ledger-table").then((m) => m.LedgerTable),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="py-16 text-center text-sm font-semibold text-muted-foreground">
+        Opening transfers table…
+      </p>
+    ),
+  }
+);
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -34,8 +65,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const rowFee = (amountUsd: number, feeUsd?: number) =>
   Number(feeUsd) > 0 ? Number(feeUsd) : feeOf(Number(amountUsd) || 0);
 
-const TAG_OPTIONS = [
-  { id: "ALL", label: "All Categories" },
+const TAG_OPTIONS = [  { id: "ALL", label: "All Categories" },
   { id: "SCHOOL", label: "School 🎓" },
   { id: "FOOD", label: "Food 🌾" },
   { id: "HEALTH", label: "Health 🏥" },
@@ -43,6 +73,16 @@ const TAG_OPTIONS = [
   { id: "EMERGENCY", label: "Emergency 🚨" },
   { id: "GENERAL", label: "General 💵" },
 ];
+
+/** Legend dots in the app palette (Bryntum event colors are theme-internal). */
+const LEGEND_DOT: Record<string, string> = {
+  gray: "bg-slate-400",
+  orange: "bg-amber-500",
+  red: "bg-rose-500",
+  green: "bg-emerald-500",
+  teal: "bg-teal-500",
+  blue: "bg-sky-500",
+};
 
 function statusPill(status: string) {
   switch (status) {
@@ -153,6 +193,10 @@ export default function DashboardPage() {
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [ledgerView, setLedgerView] = useState<"cards" | "table" | "timeline">(
+    "cards"
+  );
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   function resetConfirmPins() {
     setPinStage(false);
@@ -237,6 +281,22 @@ export default function DashboardPage() {
     if (selectedStatus !== "ALL" && r.status !== selectedStatus) return false;
     return true;
   });
+
+  // Jump from the table/timeline into a transfer's action card.
+  function openEscrow(id: string) {
+    setLedgerView("cards");
+    setHighlightId(id);
+    window.setTimeout(() => {
+      document
+        .getElementById(`escrow-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
+  const timelineModel = useMemo(
+    () => buildTimelineModel(filteredRows),
+    [filteredRows]
+  );
 
   // Financial Metrics Calculation
   const totalVolume = rows.reduce((acc, r) => acc + (r.amount_usd || 0), 0);
@@ -419,8 +479,87 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Vertical transfer list — everything on the page, up/down scroll only */}
+      {/* Ledger views: action cards · AG Grid table · Bryntum escrow timeline */}
+      <div
+        role="tablist"
+        aria-label="Ledger views"
+        className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1"
+      >
+        {(
+          [
+            { id: "cards", label: "Cards", icon: List },
+            { id: "table", label: "Table", icon: Table },
+            { id: "timeline", label: "Timeline", icon: CalendarRange },
+          ] as const
+        ).map((v) => {
+          const Icon = v.icon;
+          const active = ledgerView === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setLedgerView(v.id)}
+              className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-bold transition-all ${
+                active
+                  ? "bg-surface text-foreground shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon aria-hidden="true" className="size-4 shrink-0" />
+              <span className="truncate">{v.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {ledgerView === "table" ? (
+        <LedgerTableView rows={filteredRows} onOpen={openEscrow} />
+      ) : ledgerView === "timeline" ? (
+        <div className="card flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+            <h2 className="text-sm font-extrabold text-foreground">
+              Escrow timeline — money against the refund clock
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              {STATUS_LEGEND.map((l) => (
+                <span
+                  key={l.status}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`size-2.5 rounded-full ${LEGEND_DOT[l.color] ?? "bg-slate-400"}`}
+                  />
+                  {l.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          {filteredRows.length === 0 ? (
+            <div className="card py-12 text-center">
+              <p className="text-sm font-semibold">No transactions match your query.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Try resetting your filters or query terms.
+              </p>
+            </div>
+          ) : (
+            <EscrowTimeline
+              resources={timelineModel.resources}
+              events={timelineModel.events}
+              startDate={timelineModel.startDate}
+              endDate={timelineModel.endDate}
+            />
+          )}
+          <p className="text-xs leading-5 text-muted-foreground">
+            Each bar runs from creation to its refund deadline inside its purpose
+            lane. Powered by Bryntum Scheduler (trial).
+          </p>
+        </div>
+      ) : (
       <div className="flex flex-col gap-3">
+        {/* Vertical transfer list — everything on the page, up/down scroll only */}
         {filteredRows.length === 0 ? (
           <div className="card py-12 text-center">
             <p className="text-sm font-semibold">No transactions match your query.</p>
@@ -428,7 +567,13 @@ export default function DashboardPage() {
           </div>
         ) : (
           filteredRows.map((r) => (
-            <div key={r.id} className="card flex flex-col gap-3">
+            <div
+              key={r.id}
+              id={`escrow-${r.id}`}
+              className={`card flex scroll-mt-20 flex-col gap-3 transition-shadow ${
+                highlightId === r.id ? "ring-2 ring-brand-500" : ""
+              }`}
+            >
               {/* Row 1: escrow id + status */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
@@ -647,6 +792,7 @@ export default function DashboardPage() {
           ))
         )}
       </div>
+      )}
 
       {/* List footer */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-muted-foreground">

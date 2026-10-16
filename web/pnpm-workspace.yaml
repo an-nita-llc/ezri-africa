@@ -6,3 +6,7 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+  # Bryntum trial postinstall only rebuilds auxiliary bundles; the shipped
+  # scheduler.module.js works without it (verified: local prod build green).
+  '@bryntum/scheduler-trial': false
+  '@bryntum/scheduler-trial-lib': false
