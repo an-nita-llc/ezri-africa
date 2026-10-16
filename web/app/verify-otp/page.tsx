@@ -39,14 +39,18 @@ function OtpVerifyForm() {
     }
     setPending(true);
     try {
-      const r = await fetch(`${API}/api/auth/demo`, { method: "POST" });
+      const r = await fetch(`${API}/api/auth/demo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email || "" }),
+      });
       const j = await r.json();
       if (!j.token || !j.user) {
         setError("That code didn't match. Try again or request a new code.");
         setPending(false);
         return;
       }
-      await saveSession({ token: j.token, email: email || j.user.email, name: j.user.name });
+      await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
       router.push(destination);
       router.refresh();
     } catch {

@@ -137,6 +137,14 @@ def verify_user(email: str, password: str) -> dict | None:
     return {"email": row["email"], "name": row["name"]}
 
 
+def get_user(email: str) -> dict | None:
+    """Lookup without checking the password — demo login accepts any credentials."""
+    email = email.strip().lower()
+    with _db() as con:
+        row = con.execute("SELECT email,name FROM users WHERE email=?", (email,)).fetchone()
+    return {"email": row["email"], "name": row["name"]} if row else None
+
+
 def create_session(email: str) -> str:
     token = "ezk_" + secrets.token_hex(24)
     with _db() as con:

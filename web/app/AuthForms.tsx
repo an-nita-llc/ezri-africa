@@ -56,17 +56,34 @@ export function LoginForm() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    const typedEmail = email.trim();
+    if (!typedEmail) {
+      setError("Please enter your email address.");
+      return;
+    }
     setPending(true);
     try {
-      const j = await post("/api/auth/login", { email, password });
-      if (!j.token || !j.user) {
+      // 1) Accounts created via Sign up log in with their real password.
+      let session: { token: string; email: string; name: string } | null = null;
+      const j = await post("/api/auth/login", { email: typedEmail, password });
+      if (j.token && j.user) {
+        session = { token: j.token, email: j.user.email, name: j.user.name };
+      }
+      // 2) Demo mode: ANY email + password opens a session — no button needed.
+      if (!session) {
+        const d = await post("/api/auth/demo", { email: typedEmail, password });
+        if (d.token && d.user) {
+          session = { token: d.token, email: d.user.email, name: d.user.name };
+        }
+      }
+      if (!session) {
         setError(
           "We couldn't sign you in with those details. Check your email and password, then try again.",
         );
         setPending(false);
         return;
       }
-      await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
+      await saveSession(session);
       const next = searchParams.get("next");
       const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
       router.push(dest);
@@ -88,7 +105,8 @@ export function LoginForm() {
         <input
           id="email"
           name="email"
-          type="email"
+          type="text"
+          inputMode="email"
           autoComplete="email"
           required
           value={email}
@@ -127,6 +145,9 @@ export function LoginForm() {
           "Sign in"
         )}
       </button>
+      <p className="text-center text-xs leading-5 text-muted-foreground">
+        Demo mode: any email and password opens your sender session instantly.
+      </p>
     </form>
   );
 }
@@ -203,7 +224,7 @@ export function OneTapDemoButton() {
     setError(null);
     setPending(true);
     try {
-      const j = await post("/api/auth/demo");
+      const j = await post("/api/auth/demo", {});
       if (!j.token || !j.user) {
         setError("Demo login didn't complete. Try again or create an account.");
         setPending(false);
@@ -275,7 +296,7 @@ export function PasskeySignInButton() {
           // Cancelled or no registered credential — continue to session.
         }
       }
-      const j = await post("/api/auth/demo");
+      const j = await post("/api/auth/demo", {});
       if (!j.token || !j.user) {
         setError("Passkey sign-in didn't complete. Try again or use your email and password.");
         setPending(false);

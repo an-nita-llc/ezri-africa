@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from ai_guard import FEE_PCT, fee_of, parse_intent, strict_proof_check
 from ledger import (
     create_escrow, create_session, create_user, find_by_capture,
-    get_escrow, get_session_email, list_escrows, update_escrow, verify_user,
+    get_escrow, get_session_email, get_user, list_escrows, update_escrow, verify_user,
 )
 from models import CaptureIn, EscrowCreateIn, OverrideIn, ParseIn, RefundIn
 from paypal_client import MOCK, capture_order, create_order, refund_capture
@@ -19,15 +19,19 @@ from paypal_client import MOCK, capture_order, create_order, refund_capture
 EXPIRY_MIN = int(os.environ.get("DEMO_EXPIRY_MINUTES", "10"))
 
 # CORS allowlist (demo): explicit origins only — never "*" with credentials.
-# Override with CORS_ALLOWED_ORIGINS in production.
+# Override with CORS_ALLOWED_ORIGINS in production (Render sets it).
+_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 _CORS_ORIGINS = [
     o.strip()
-    for o in os.environ.get(
-        "CORS_ALLOWED_ORIGINS",
-        "https://an-nita.com,https://www.an-nita.com",
+    for o in (
+        _origins_env or "https://an-nita.com,https://www.an-nita.com"
     ).split(",")
     if o.strip() and o.strip() != "*"
 ] or ["https://an-nita.com"]
+if not _origins_env:
+    # Local demo default: allow the dev web server too (skipped when the
+    # env var is explicitly set, i.e. real deployments).
+    _CORS_ORIGINS += ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 app = FastAPI(title="Ezri Africa — PayPal AI bridge (Liberia pilot)")
 app.add_middleware(
@@ -60,6 +64,14 @@ class LoginIn(BaseModel):
     password: str = ""
 
 
+class DemoIn(BaseModel):
+    """Any credentials open a demo session — embedded in the sign-in form."""
+
+    email: str = ""
+    password: str = ""
+    name: str = ""
+
+
 def _sender(request: Request) -> str:
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
@@ -83,14 +95,42 @@ def auth_login(body: LoginIn) -> dict:
     return {"token": create_session(user["email"]), "user": user}
 
 
+def _name_from_email(email: str) -> str:
+    """'john.doe@example.com' -> 'John Doe' so the agent can greet by name."""
+    local = email.split("@", 1)[0]
+    words = local.replace(".", " ").replace("_", " ").replace("-", " ").split()
+    name = " ".join(w.capitalize() for w in words if w)
+    return name[:80] or "Sender"
+
+
 @app.post("/api/auth/demo")
-def auth_demo() -> dict:
-    """One-tap judge login. Idempotent demo sender."""
-    email = "demo@ezri.africa"
-    create_user("Demo Sender", email, "demo1234")
-    user = verify_user(email, "demo1234")
+def auth_demo(body: DemoIn | None = None) -> dict:
+    """Demo login: ANY email + password opens a session. Creates the sender on the fly.
+
+    Works with no body (one-tap button) or {email, password} from the sign-in form.
+    """
+    email = (body.email if body else "").strip().lower()
+    password = (body.password if body else "")
+    name = (body.name if body else "").strip()
+
+    if not email:
+        # One-tap path — canonical judge identity.
+        email, name = "demo@ezri.africa", "Demo Sender"
+    if not name:
+        name = _name_from_email(email)
+    if len(password) < 4:
+        password = "demo1234"  # demo mode never rejects a password
+
+    user = verify_user(email, password)  # correct password still lands first
+    if not user:
+        user = create_user(name, email, password) or get_user(email)
+    if not user:
+        # Safety net: fall back to the canonical demo sender.
+        email, name, password = "demo@ezri.africa", "Demo Sender", "demo1234"
+        create_user(name, email, password)
+        user = verify_user(email, password)
     assert user is not None
-    return {"token": create_session(email), "user": user}
+    return {"token": create_session(user["email"]), "user": user}
 
 
 @app.get("/api/auth/me")
