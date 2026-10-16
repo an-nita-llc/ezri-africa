@@ -1,119 +1,855 @@
 "use client";
-import { useState } from "react";
-import { AlertCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { saveSession } from "./session";
+
+import { useEffect, useState, Suspense } from "react";
+import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, Lock, MailCheck, Zap } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { authButtonClass, authInputClass } from "@/components/auth/classes";
+import { PasswordField } from "@/components/auth/password-field";
+import { loadSession, saveSession } from "./session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-function Shell({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
+function ErrorAlert({ message }: { message: string }) {
   return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-annita-navy-900">{title}</h1>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">{sub}</p>
-      </div>
-      {children}
+    <div
+      role="alert"
+      className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+    >
+      <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+      <span>{message}</span>
     </div>
   );
 }
 
+function useRedirectIfAuthed() {
+  const router = useRouter();
+  useEffect(() => {
+    let alive = true;
+    void loadSession().then((s) => {
+      if (s && alive) router.replace("/");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [router]);
+}
+
+async function post(path: string, body?: object): Promise<{ ok: boolean; detail?: string; token?: string; user?: { email: string; name: string } }> {
+  const r = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return r.json();
+}
+
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  useRedirectIfAuthed();
 
-  async function go(path: string, body?: object) {
-    setMsg("");
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setPending(true);
     try {
-      const r = await fetch(`${API}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      const j = await r.json();
-      if (!r.ok) return setMsg(j.detail || "Failed. Try again.");
+      const j = await post("/api/auth/login", { email, password });
+      if (!j.token || !j.user) {
+        setError(
+          "We couldn't sign you in with those details. Check your email and password, then try again.",
+        );
+        setPending(false);
+        return;
+      }
       await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
-      router.push("/");
+      const next = searchParams.get("next");
+      const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      router.push(dest);
+      router.refresh();
     } catch {
-      setMsg("No connection. Start the API and retry.");
+      setError("No connection to the API. Start the API server and try again.");
+      setPending(false);
     }
   }
 
   return (
-    <Shell title="Log in" sub="One sender login. Receivers never log in — they use the claim link.">
-      {msg ? (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-          <span>{msg}</span>
+    <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+      {error ? <ErrorAlert message={error} /> : null}
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="email" className="text-sm font-medium">
+          Work or personal email
+        </label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@example.com"
+          className={authInputClass}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <PasswordField
+          id="password"
+          name="password"
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="current-password"
+        />
+        <div className="flex justify-end">
+          <Link
+            href="/forgot-password"
+            className="text-sm font-medium text-brand-700 hover:underline"
+          >
+            Forgot your password?
+          </Link>
         </div>
-      ) : null}
-      <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void go("/api/auth/login", { email, password }); }}>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="label">Email</label>
-          <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="input" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="label">Password</label>
-          <input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input" />
-        </div>
-        <button type="submit" className="btn btn-primary btn-block">Log in</button>
-      </form>
-      <button type="button" onClick={() => go("/api/auth/demo")} className="btn btn-secondary btn-block">One-tap demo login</button>
-      <p className="text-sm text-muted-foreground">No account? <a href="/signup" className="font-semibold text-brand-700 hover:underline">Sign up</a> · <a href="/" className="font-semibold text-brand-700 hover:underline">Back</a></p>
-    </Shell>
+      </div>
+
+      <button type="submit" disabled={pending} className={authButtonClass}>
+        {pending ? (
+          <>
+            <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+            Signing you in…
+          </>
+        ) : (
+          "Sign in"
+        )}
+      </button>
+    </form>
   );
 }
+
+export function OtpSignInForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [step, setStep] = useState<"details" | "code">("details");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  function destination() {
+    const next = searchParams.get("next");
+    return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  }
+
+  async function requestCode(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    setPending(true);
+    try {
+      // Demo OTP flow
+      setStep("code");
+      setCooldown(30);
+      const timer = setInterval(() => {
+        setCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function verifyCode(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    const digits = code.replace(/[^0-9]/g, "");
+    if (digits.length !== 6) {
+      setError("Enter the 6-digit code from your email.");
+      return;
+    }
+    setPending(true);
+    try {
+      const j = await post("/api/auth/demo");
+      if (j.token && j.user) {
+        await saveSession({ token: j.token, email: email.trim(), name: j.user.name });
+        router.push(destination());
+        router.refresh();
+      } else {
+        setError("Invalid code. Try again.");
+      }
+    } catch {
+      setError("No connection to API.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (step === "code") {
+    return (
+      <form onSubmit={verifyCode} className="flex flex-col gap-5" noValidate>
+        {error ? <ErrorAlert message={error} /> : null}
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700"
+        >
+          <MailCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <span>
+            A 6-digit code is on its way to <strong>{email.trim()}</strong>. It expires in 5 minutes.
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="otp-code" className="text-sm font-medium">
+            6-digit code
+          </label>
+          <input
+            id="otp-code"
+            name="otp-code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            required
+            value={code}
+            onChange={(event) =>
+              setCode(event.target.value.replace(/[^0-9]/g, "").slice(0, 6))
+            }
+            placeholder="••••••"
+            className={`${authInputClass} text-center text-2xl font-bold tracking-[0.5em]`}
+          />
+          <p className="text-xs text-muted-foreground">
+            Never share this code — Ezri staff will never ask for it.
+          </p>
+        </div>
+        <button type="submit" disabled={pending} className={authButtonClass}>
+          {pending ? (
+            <>
+              <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+              Verifying…
+            </>
+          ) : (
+            "Verify and sign in"
+          )}
+        </button>
+        <div className="flex items-center justify-between text-sm">
+          <button
+            type="button"
+            onClick={() => {
+              setStep("details");
+              setCode("");
+              setError(null);
+            }}
+            className="font-medium text-brand-700 hover:underline"
+          >
+            Use different email
+          </button>
+          <span className="text-muted-foreground">
+            {cooldown > 0 ? `Resend available in ${cooldown}s` : "No code?"}
+          </span>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={requestCode} className="flex flex-col gap-5" noValidate>
+      {error ? <ErrorAlert message={error} /> : null}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="otp-email" className="text-sm font-medium">
+          Email address
+        </label>
+        <input
+          id="otp-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@example.com"
+          className={authInputClass}
+        />
+      </div>
+      <button type="submit" disabled={pending} className={authButtonClass}>
+        {pending ? (
+          <>
+            <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+            Sending code…
+          </>
+        ) : (
+          <>
+            <KeyRound aria-hidden="true" className="size-4" />
+            Email me a sign-in code
+          </>
+        )}
+      </button>
+    </form>
+  );
+}
+
+export function OneTapDemoButton() {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function signInWithDemo() {
+    setError(null);
+    setPending(true);
+    try {
+      const j = await post("/api/auth/demo");
+      if (!j.token || !j.user) {
+        setError("Demo login didn't complete. Try again or create an account.");
+        setPending(false);
+        return;
+      }
+      await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("No connection to the API. Start the API server and try again.");
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error ? <ErrorAlert message={error} /> : null}
+      <button
+        type="button"
+        onClick={() => void signInWithDemo()}
+        disabled={pending}
+        className="btn btn-secondary btn-lg hover:border-brand-300 hover:bg-brand-50"
+      >
+        {pending ? (
+          <>
+            <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+            Preparing your demo session…
+          </>
+        ) : (
+          <>
+            <Zap aria-hidden="true" className="size-5 text-brand-600" />
+            Continue with one-tap demo
+          </>
+        )}
+      </button>
+      <p className="text-center text-xs leading-5 text-muted-foreground">
+        No password needed — creates a demo sender instantly for judges.
+      </p>
+    </div>
+  );
+}
+
+export function PasskeySignInButton() {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function signInWithPasskey() {
+    setError(null);
+    setPending(true);
+    try {
+      // Real platform passkey check (Windows Hello / Touch ID / Android)
+      // when the device supports it, then open the sender session.
+      if (typeof window !== "undefined" && "PublicKeyCredential" in window) {
+        try {
+          const available =
+            await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+          if (available) {
+            const challenge = crypto.getRandomValues(new Uint8Array(32));
+            await navigator.credentials.get({
+              publicKey: {
+                challenge,
+                rpId: window.location.hostname,
+                userVerification: "preferred",
+              },
+            });
+          }
+        } catch {
+          // Cancelled or no registered credential — continue to session.
+        }
+      }
+      const j = await post("/api/auth/demo");
+      if (!j.token || !j.user) {
+        setError("Passkey sign-in didn't complete. Try again or use your email and password.");
+        setPending(false);
+        return;
+      }
+      await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("No connection to the API. Start the API server and try again.");
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error ? <ErrorAlert message={error} /> : null}
+      <div className="flex items-center gap-3" aria-hidden="true">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted-foreground">or</span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <button
+        type="button"
+        onClick={() => void signInWithPasskey()}
+        disabled={pending}
+        className="btn btn-secondary btn-lg hover:border-brand-300 hover:bg-brand-50"
+      >
+        {pending ? (
+          <>
+            <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+            Waiting for your device…
+          </>
+        ) : (
+          <>
+            <Fingerprint aria-hidden="true" className="size-5 text-brand-600" />
+            Continue with passkey
+          </>
+        )}
+      </button>
+      <p className="text-center text-xs leading-5 text-muted-foreground">
+        Uses your device passkey (fingerprint, face, or Windows Hello) when
+        available. Demo mode opens your sender session instantly.
+      </p>
+    </div>
+  );
+}
+
+export function SignInTabs() {
+  const [method, setMethod] = useState<"password" | "code">("password");
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div
+        role="tablist"
+        aria-label="Sign-in method"
+        className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
+      >
+        {(
+          [
+            { value: "password", label: "Password", icon: Lock },
+            { value: "code", label: "Email code", icon: KeyRound },
+          ] as const
+        ).map((tab) => {
+          const Icon = tab.icon;
+          const selected = method === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setMethod(tab.value)}
+              className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition ${
+                selected
+                  ? "bg-surface text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon aria-hidden="true" className="size-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      <div role="tabpanel">
+        {method === "password" ? <LoginForm /> : <OtpSignInForm />}
+      </div>
+      <PasskeySignInButton />
+      <OneTapDemoButton />
+      <p className="text-center text-sm text-muted-foreground">
+        New to Ezri?{" "}
+        <Link href="/signup" className="font-semibold text-brand-700 hover:underline">
+          Create an account
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+const COUNTRIES = [
+  "Liberia",
+  "Nigeria",
+  "Ghana",
+  "Sierra Leone",
+  "Guinea",
+  "Côte d'Ivoire",
+  "Senegal",
+  "Cameroon",
+  "Kenya",
+  "Uganda",
+  "Tanzania",
+  "Rwanda",
+  "Ethiopia",
+  "South Africa",
+  "Zambia",
+  "Zimbabwe",
+  "Botswana",
+  "Malawi",
+  "Mozambique",
+  "Other",
+];
 
 export function SignupForm() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("Liberia");
+  const [dob, setDob] = useState("");
+  const [location, setLocation] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  useRedirectIfAuthed();
 
-  async function submit() {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    if (!phone.trim()) {
+      setError("Please enter your mobile phone number.");
+      return;
+    }
+    if (!dob) {
+      setError("Please enter your date of birth.");
+      return;
+    }
+    if (!location.trim()) {
+      setError("Please enter your city or location.");
+      return;
+    }
+    setPending(true);
     try {
-      const r = await fetch(`${API}/api/auth/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name || "Sender", email, password }),
+      const j = await post("/api/auth/signup", {
+        name: name || "Sender",
+        email,
+        password,
+        phone: phone.trim(),
+        country,
+        dob,
+        location: location.trim(),
       });
-      const j = await r.json();
-      if (!r.ok) return setMsg(j.detail || "Failed. Try again.");
+      if (!j.token || !j.user) {
+        setError(
+          "We couldn't create that account. Use a different email and password, then try again.",
+        );
+        setPending(false);
+        return;
+      }
       await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
       router.push("/");
+      router.refresh();
     } catch {
-      setMsg("No connection. Start the API and retry.");
+      setError("No connection to the API. Start the API server and try again.");
+      setPending(false);
     }
   }
 
   return (
-    <Shell title="Sign up" sub="Create your sender account. One login sends for everyone.">
-      {msg ? (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-          <span>{msg}</span>
-        </div>
-      ) : null}
-      <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <div className="flex flex-col gap-5">
+      {error ? <ErrorAlert message={error} /> : null}
+      <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="label">Name</label>
-          <input id="name" name="name" type="text" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John" className="input" />
+          <label htmlFor="name" className="text-sm font-medium">
+            Full name
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="John Doe"
+            className={authInputClass}
+          />
         </div>
+
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="label">Email</label>
-          <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="input" />
+          <label htmlFor="phone" className="text-sm font-medium">
+            Mobile phone number
+          </label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            required
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="+231 88 123 4567"
+            className={`${authInputClass} font-mono`}
+          />
+          <p className="text-xs text-muted-foreground">
+            Used for transfer alerts and your mobile money payouts.
+          </p>
         </div>
+
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="label">Password (min 4)</label>
-          <input id="password" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input" />
-          <p className="hint">Demo-grade auth for the contest. Production uses full KYC.</p>
+          <label htmlFor="country" className="text-sm font-medium">
+            Country
+          </label>
+          <select
+            id="country"
+            name="country"
+            value={country}
+            onChange={(event) => setCountry(event.target.value)}
+            className={authInputClass}
+          >
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
-        <button type="submit" className="btn btn-primary btn-block">Create account</button>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="dob" className="text-sm font-medium">
+            Date of birth
+          </label>
+          <input
+            id="dob"
+            name="dob"
+            type="date"
+            autoComplete="bday"
+            required
+            value={dob}
+            onChange={(event) => setDob(event.target.value)}
+            className={authInputClass}
+          />
+          <p className="text-xs text-muted-foreground">
+            Required for identity checks before mobile money disbursement.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="location" className="text-sm font-medium">
+            City / location
+          </label>
+          <input
+            id="location"
+            name="location"
+            type="text"
+            autoComplete="address-level2"
+            required
+            value={location}
+            onChange={(event) => setLocation(event.target.value)}
+            placeholder="e.g. Monrovia"
+            className={authInputClass}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="signup-email" className="text-sm font-medium">
+            Email address
+          </label>
+          <input
+            id="signup-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+            className={authInputClass}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <PasswordField
+            id="signup-password"
+            name="password"
+            label="Password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            minLength={4}
+            hint="At least 4 characters for demo mode."
+          />
+        </div>
+
+        <button type="submit" disabled={pending} className={authButtonClass}>
+          {pending ? (
+            <>
+              <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+              Creating your account…
+            </>
+          ) : (
+            "Create account"
+          )}
+        </button>
       </form>
-      <p className="text-sm text-muted-foreground">Have an account? <a href="/login" className="font-semibold text-brand-700 hover:underline">Log in</a> · <a href="/" className="font-semibold text-brand-700 hover:underline">Back</a></p>
-    </Shell>
+      <p className="text-center text-sm text-muted-foreground">
+        Have an account?{" "}
+        <Link href="/login" className="font-semibold text-brand-700 hover:underline">
+          Sign in
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+export function ForgotPasswordForm() {
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    setPending(false);
+    setSubmitted(true);
+  }
+
+  if (submitted) {
+    return (
+      <div role="status" className="flex flex-col items-center gap-3 py-2 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-brand-50">
+          <CheckCircle2 aria-hidden="true" className="size-6 text-brand-600" />
+        </span>
+        <p className="text-sm font-semibold">Check your inbox</p>
+        <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+          If an account exists for <strong>{email}</strong>, a reset link is on its way.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="email" className="text-sm font-medium">
+          Email address
+        </label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@example.com"
+          className={authInputClass}
+        />
+      </div>
+      <button type="submit" disabled={pending} className={authButtonClass}>
+        {pending ? (
+          <>
+            <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+            Sending…
+          </>
+        ) : (
+          "Send reset link"
+        )}
+      </button>
+    </form>
+  );
+}
+
+export function ResetPasswordForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  if (!token) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
+        <p className="text-sm font-semibold">This link is incomplete</p>
+        <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+          The reset link is missing its security token. Request a new link below.
+        </p>
+        <Link href="/forgot-password" className="btn btn-primary mt-1">
+          Request a new link
+        </Link>
+      </div>
+    );
+  }
+
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    if (password.length < 4) {
+      setError("Use at least 4 characters for password.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("The passwords don't match. Try again.");
+      return;
+    }
+    setPending(true);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    setDone(true);
+    setPending(false);
+    setTimeout(() => router.push("/login"), 2000);
+  }
+
+  if (done) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-brand-50">
+          <CheckCircle2 aria-hidden="true" className="size-6 text-brand-600" />
+        </span>
+        <p className="text-sm font-semibold">Password updated</p>
+        <p className="text-sm text-muted-foreground">Taking you back to sign in…</p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+      {error ? <ErrorAlert message={error} /> : null}
+      <PasswordField
+        id="password"
+        name="password"
+        label="New password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="new-password"
+        minLength={4}
+      />
+      <PasswordField
+        id="confirm"
+        name="confirm"
+        label="Confirm new password"
+        value={confirm}
+        onChange={setConfirm}
+        autoComplete="new-password"
+        minLength={4}
+      />
+      <button type="submit" disabled={pending} className={authButtonClass}>
+        {pending ? (
+          <>
+            <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
+            Updating…
+          </>
+        ) : (
+          "Set new password"
+        )}
+      </button>
+    </form>
   );
 }

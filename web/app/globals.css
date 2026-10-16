@@ -7,6 +7,15 @@
   --muted: #f1f5f9;
   --muted-foreground: #475569;
   --border: #e2e8f0;
+  --font-scale: 1;
+
+  --font-sans: var(--font-geist-sans, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif);
+  --font-mono: var(--font-geist-mono, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace);
+}
+
+/* Dynamic Font Scaling for Big Text / Accessibility mode */
+html[data-font-scale="big"] {
+  --font-scale: 1.15;
 }
 
 @theme inline {
@@ -41,36 +50,49 @@
   --color-brand-800: #9a3412;
   --color-brand-900: #7c2d12;
   --color-brand-950: #431407;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 
-  --text-xs: 0.75rem;
-  --text-xs--line-height: 1rem;
-  --text-sm: 0.875rem;
-  --text-sm--line-height: 1.25rem;
-  --text-base: clamp(1rem, 0.9755rem + 0.0068vw, 1.0625rem);
-  --text-base--line-height: 1.5rem;
-  --text-lg: clamp(1.0625rem, 0.9891rem + 0.0204vw, 1.25rem);
-  --text-lg--line-height: 1.75rem;
-  --text-xl: clamp(1.125rem, 0.9783rem + 0.0408vw, 1.5rem);
-  --text-xl--line-height: 1.75rem;
-  --text-2xl: clamp(1.375rem, 1.1304rem + 0.0679vw, 2rem);
-  --text-2xl--line-height: 2.25rem;
-  --text-3xl: clamp(1.625rem, 1.2826rem + 0.0951vw, 2.5rem);
-  --text-3xl--line-height: 2.5rem;
-  --text-4xl: clamp(2rem, 1.511rem + 0.1359vw, 3.25rem);
-  --text-4xl--line-height: 2.75rem;
+  /* Fortune 500 Fluid Responsive Typography Scale (320px -> 1440px) */
+  --text-xs: clamp(calc(0.72rem * var(--font-scale)), calc(0.7rem * var(--font-scale)) + 0.1vw, calc(0.8125rem * var(--font-scale)));
+  --text-xs--line-height: 1.35;
+
+  --text-sm: clamp(calc(0.8125rem * var(--font-scale)), calc(0.78rem * var(--font-scale)) + 0.15vw, calc(0.9375rem * var(--font-scale)));
+  --text-sm--line-height: 1.45;
+
+  --text-base: clamp(calc(0.9375rem * var(--font-scale)), calc(0.9rem * var(--font-scale)) + 0.22vw, calc(1.0625rem * var(--font-scale)));
+  --text-base--line-height: 1.55;
+
+  --text-lg: clamp(calc(1.0625rem * var(--font-scale)), calc(1rem * var(--font-scale)) + 0.35vw, calc(1.25rem * var(--font-scale)));
+  --text-lg--line-height: 1.5;
+
+  --text-xl: clamp(calc(1.1875rem * var(--font-scale)), calc(1.1rem * var(--font-scale)) + 0.5vw, calc(1.5rem * var(--font-scale)));
+  --text-xl--line-height: 1.4;
+
+  --text-2xl: clamp(calc(1.375rem * var(--font-scale)), calc(1.22rem * var(--font-scale)) + 0.8vw, calc(1.875rem * var(--font-scale)));
+  --text-2xl--line-height: 1.3;
+
+  --text-3xl: clamp(calc(1.625rem * var(--font-scale)), calc(1.4rem * var(--font-scale)) + 1.2vw, calc(2.375rem * var(--font-scale)));
+  --text-3xl--line-height: 1.2;
+
+  --text-4xl: clamp(calc(2rem * var(--font-scale)), calc(1.65rem * var(--font-scale)) + 1.8vw, calc(3rem * var(--font-scale)));
+  --text-4xl--line-height: 1.15;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+  letter-spacing: -0.011em;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 select {
   appearance: none;
   -webkit-appearance: none;
-  min-height: 2.75rem;
+  min-height: clamp(2.5rem, 2.2rem + 1vw, 2.875rem);
   border-radius: 0.75rem;
   border: 1px solid var(--border);
   background-color: var(--surface);
@@ -78,8 +100,8 @@ select {
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
   padding: 0.625rem 2.5rem 0.625rem 0.875rem;
-  font-size: 1rem;
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
   color: var(--foreground);
   cursor: pointer;
   transition:
@@ -106,7 +128,7 @@ select:disabled {
 }
 
 select[class] {
-  min-height: 2.75rem;
+  min-height: clamp(2.5rem, 2.2rem + 1vw, 2.875rem);
   padding-right: 2.5rem;
   border-radius: 0.75rem;
 }
@@ -126,6 +148,13 @@ select option:disabled {
   color: #93a4b8;
 }
 
+.bg-grid-faint {
+  background-image:
+    linear-gradient(#ffffff 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
 @keyframes annita-overlay-in {
   from {
     opacity: 0;
@@ -138,20 +167,20 @@ select option:disabled {
 @keyframes annita-modal-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
+    transform: translateX(100%);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(0);
   }
 }
 
 .animate-overlay-in {
-  animation: annita-overlay-in 180ms ease-out;
+  animation: annita-overlay-in 200ms ease-out forwards;
 }
 
 .animate-modal-in {
-  animation: annita-modal-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: annita-modal-in 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -163,19 +192,19 @@ select option:disabled {
 
 @layer components {
   .btn {
-    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-5 text-center text-sm font-semibold transition-colors select-none disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 text-center text-sm font-semibold transition-all select-none disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98];
   }
   .btn:focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-600;
   }
   .btn-primary {
-    @apply bg-brand-600 text-white hover:bg-brand-700;
+    @apply bg-brand-600 text-white hover:bg-brand-700 shadow-sm hover:shadow-md;
   }
   .btn-secondary {
-    @apply border border-border bg-surface text-foreground hover:bg-muted;
+    @apply border border-border bg-surface text-foreground hover:bg-muted shadow-2xs;
   }
   .btn-danger {
-    @apply bg-danger text-white hover:brightness-110;
+    @apply bg-danger text-white hover:brightness-110 shadow-sm;
   }
   .btn-danger-outline {
     @apply border border-danger/40 bg-transparent text-danger hover:bg-danger/10;
@@ -184,16 +213,16 @@ select option:disabled {
     @apply bg-transparent text-brand-700 hover:bg-brand-50;
   }
   .btn-sm {
-    @apply min-h-10 px-3 text-xs;
+    @apply min-h-9 px-3 text-xs rounded-lg;
   }
   .btn-lg {
-    @apply min-h-12 px-6 text-sm;
+    @apply min-h-12 px-6 text-sm rounded-2xl;
   }
   .btn-block {
     @apply w-full;
   }
   .card {
-    @apply rounded-xl border border-border bg-surface p-4 sm:p-6;
+    @apply rounded-3xl border border-border bg-surface p-4 sm:p-6 shadow-sm;
   }
   .input {
     @apply min-h-12 w-full rounded-xl border border-border bg-background px-4 text-base outline-none transition-all placeholder:text-muted-foreground/60 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 focus-visible:outline-none;
@@ -209,21 +238,12 @@ select option:disabled {
   }
 }
 
-/* Ezri accessibility modes (big text + high contrast). */
-.ezri-big {
-  font-size: 1.125rem;
-}
-.ezri-big .text-sm {
-  font-size: 1rem;
-}
-.ezri-big .text-xs {
-  font-size: 0.875rem;
-}
-.ezri-contrast {
+/* High contrast mode theme override */
+[data-contrast="true"] {
   --background: #000000;
-  --surface: #0a0a0a;
-  --muted: #1a1a1a;
+  --surface: #0f0f0f;
+  --muted: #1c1c1e;
   --foreground: #ffffff;
-  --muted-foreground: #d4d4d4;
-  --border: #525252;
+  --muted-foreground: #e5e5ea;
+  --border: #3a3a3c;
 }

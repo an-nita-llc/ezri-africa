@@ -1,6 +1,7 @@
 import {
+  Download,
   History,
-  Home,
+  Lock,
   LogIn,
   MessageSquare,
   UserPlus,
@@ -9,21 +10,23 @@ import {
 export type NavItem = {
   href: string;
   label: string;
-  icon: typeof Home;
+  icon: typeof MessageSquare;
 };
 
 export const mobileNavItems: NavItem[] = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/#send", label: "Send", icon: MessageSquare },
-  { href: "/#ledger", label: "Ledger", icon: History },
-  { href: "/login", label: "Log in", icon: LogIn },
+  { href: "/", label: "AI Chat", icon: MessageSquare },
+  { href: "/claim", label: "Claim", icon: Download },
+  { href: "/purpose-lock", label: "Lock Config", icon: Lock },
+  { href: "/dashboard", label: "Ledger", icon: History },
+  { href: "/login", label: "Sign in", icon: LogIn },
   { href: "/signup", label: "Sign up", icon: UserPlus },
 ];
 
 export const sidebarNavItems: NavItem[] = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/#send", label: "Send", icon: MessageSquare },
-  { href: "/#ledger", label: "Ledger", icon: History },
-  { href: "/login", label: "Log in", icon: LogIn },
+  { href: "/", label: "AI Chat & Send", icon: MessageSquare },
+  { href: "/claim", label: "Claim Transfer", icon: Download },
+  { href: "/purpose-lock", label: "Purpose Lock Config", icon: Lock },
+  { href: "/dashboard", label: "Transfers Ledger", icon: History },
+  { href: "/login", label: "Sign in", icon: LogIn },
   { href: "/signup", label: "Sign up", icon: UserPlus },
 ];

@@ -1,391 +1,575 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AgGridReact } from "ag-grid-react";
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { get as idbGet, set as idbSet } from "idb-keyval";
-import { Mic, Contrast, Type, Languages, Copy, Check } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
+import {
+  AudioLines,
+  Bot,
+  Check,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  History as HistoryIcon,
+  Lock,
+  Mic,
+  Plus,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
 import PayPalButtons from "./PayPalButtons";
-import { authHeaders, clearSession, loadSession, type Session } from "./session";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { authHeaders, loadSession, type Session } from "./session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const PP_CID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
-const TAGS = ["FOOD", "SCHOOL", "HEALTH", "RENT", "EMERGENCY", "GENERAL"] as const;
 
-type Msg = { from: "you" | "ai"; text: string };
+const INITIAL_CHIPS = [
+  "Send $60 to mom for school",
+  "Send $120 for hospital bill",
+  "Send $45 for grocery food",
+  "Send $200 for rent",
+  "Configure Purpose Lock",
+];
+
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  time: string;
+  card?: any;
+  chips?: string[];
+}
 
 function greeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
+  if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
 
 function statusBadge(status: string) {
-  const base = "badge ";
-  if (status === "RELEASED") return `${base}bg-annita-green/10 text-annita-green-dark`;
-  if (status === "HELD") return `${base}bg-brand-100 text-brand-800`;
-  if (status === "NEEDS_RETRY" || status === "EXPIRED") return `${base}bg-danger/10 text-danger`;
-  if (status === "REFUNDED") return `${base}bg-muted text-muted-foreground`;
-  return `${base}bg-muted text-muted-foreground`;
+  const base = "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tracking-wide ";
+  if (status === "RELEASED") return `${base}bg-annita-green/15 text-annita-green-dark border border-annita-green/30`;
+  if (status === "HELD") return `${base}bg-brand-100 text-brand-900 border border-brand-300`;
+  if (status === "NEEDS_RETRY" || status === "EXPIRED") return `${base}bg-danger/10 text-danger border border-danger/30`;
+  if (status === "REFUNDED") return `${base}bg-muted text-muted-foreground border border-border`;
+  return `${base}bg-muted text-muted-foreground border border-border`;
 }
 
-export default function Page() {
-  const [msgs, setMsgs] = useState<Msg[]>([
-    { from: "ai", text: "Hi, I'm Ezri. Built for Africa. Tell me: who and how much? e.g. Send $60 to mom for school" },
-  ]);
-  const [input, setInput] = useState("Send $60 to mom for school, lock it");
-  const [tag, setTag] = useState<string>("SCHOOL");
+function ChatMessageItem({
+  msg,
+  sessionName,
+  onHoldPay,
+  onTagChange,
+}: {
+  msg: Message;
+  sessionName: string;
+  onHoldPay: () => void;
+  onTagChange: (tag: string) => void;
+}) {
+  return (
+    <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+      <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
+        <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+          <span>{msg.role === "assistant" ? "Ezri AI" : sessionName}</span>
+          <span className="text-[10px] text-muted-foreground/70">{msg.time}</span>
+        </div>
+
+        <div
+          className={`max-w-full rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
+            msg.role === "user"
+              ? "bg-gradient-to-r from-annita-navy-800 to-annita-navy-950 text-white rounded-br-md w-fit ml-auto"
+              : "bg-surface border border-border text-foreground rounded-bl-md w-fit shadow-2xs"
+          }`}
+        >
+          {msg.text}
+
+          {/* Step 1 card: confirm transfer + purpose lock (before any money moves) */}
+          {msg.card?.kind === "setup" && (
+            <div className="mt-3 rounded-2xl border border-brand-300 bg-brand-50/70 p-4 text-foreground text-xs flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-brand-200 pb-2 font-bold">
+                <span className="text-brand-700 flex items-center gap-1 text-sm">
+                  <Lock className="size-4" /> Step 1 · Confirm Transfer
+                </span>
+                <span className="text-base font-extrabold">${msg.card.amount_usd} USD</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-muted-foreground block font-semibold">Sending To</span>
+                  <span className="font-extrabold text-foreground capitalize">{msg.card.recipient || "mom"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block font-semibold">Estimated Payout</span>
+                  <span className="font-extrabold text-foreground">{msg.card.fx_lrd} LRD</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="font-bold text-foreground">Purpose Lock (tap to change)</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {["FOOD", "SCHOOL", "HEALTH", "RENT", "EMERGENCY", "GENERAL"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => onTagChange(t)}
+                      aria-pressed={msg.card.tag === t}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                        msg.card.tag === t
+                          ? "bg-brand-600 text-white"
+                          : "bg-surface border border-brand-200 text-brand-700 hover:bg-brand-50"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-surface px-3 py-2 text-xs">
+                <span className="font-bold text-foreground">Fraud Risk Assessment</span>
+                <span className={`font-extrabold ${msg.card.fraud_score >= 50 ? "text-danger" : "text-annita-green-dark"}`}>
+                  {msg.card.fraud_score}/100{msg.card.fraud_score < 50 ? " (Safe)" : ""}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={onHoldPay}
+                className="btn btn-primary btn-block gap-2 text-sm font-bold shadow-sm"
+              >
+                <Zap className="size-4" /> Step 2 · Lock Purpose & Fund Escrow
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PlugPage() {
+  const router = useRouter();
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [chips, setChips] = useState<string[]>(INITIAL_CHIPS);
   const [parsed, setParsed] = useState<any>(null);
   const [escrow, setEscrow] = useState<any>(null);
-  const [provider, setProvider] = useState("MTN");
-  const [pnumber, setPnumber] = useState("0881234567");
-  const [file, setFile] = useState<File | null>(null);
-  const [proofNote, setProofNote] = useState("school tuition invoice");
-  const [rows, setRows] = useState<any[]>([]);
-  const [q, setQ] = useState("");
-  const [queued, setQueued] = useState<any[]>([]);
-  const [online, setOnline] = useState(true);
-  const [session, setSession] = useState<Session | null>(null);
-  const [big, setBig] = useState(false);
-  const [contrast, setContrast] = useState(false);
-  const [simple, setSimple] = useState(false);
-  const [confirmRefund, setConfirmRefund] = useState(false);
-  const [confirmOverride, setConfirmOverride] = useState(false);
   const [copied, setCopied] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
-  const say = useCallback((t: string) => {
-    setMsgs((m) => [...m, { from: "ai", text: t }]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const say = useCallback((text: string, cardData?: any, chipsList?: string[]) => {
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setMessages((m) => [...m, { id, role: "assistant", text, time, card: cardData, chips: chipsList }]);
+    if (chipsList) setChips(chipsList);
     try {
-      const u = new SpeechSynthesisUtterance(simple ? t.split(".")[0] : t);
+      const u = new SpeechSynthesisUtterance(text);
       u.lang = "en-US";
       window.speechSynthesis?.speak(u);
     } catch {}
-  }, [simple]);
-
-  useEffect(() => {
-    boxRef.current?.scrollTo({ top: 99999 });
-    const go = () => setOnline(navigator.onLine);
-    window.addEventListener("online", go);
-    window.addEventListener("offline", go);
-    setOnline(navigator.onLine);
-    try { void idbGet("ezri_outbox").then((v) => { if (Array.isArray(v)) setQueued(v); }).catch(() => {}); } catch {}
-    void loadSession().then(setSession);
-    return () => { window.removeEventListener("online", go); window.removeEventListener("offline", go); };
   }, []);
 
-  useEffect(() => { void idbSet("ezri_outbox", queued).catch(() => {}); }, [queued]);
+  const initWelcome = useCallback((s: Session) => {
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const welcomeText = `${greeting()}, ${s.name || "Demo Sender"}\n\nPurpose-Locked Remittance\nPayPal foreign collection → AI purpose lock → Strict proof check → Mobile Money disburse\n\nLive FX Rate: 1 USD = 192.00 LRD`;
 
-  async function refresh(qq = q) {
-    try {
-      const r = await fetch(`${API}/api/dashboard?q=${encodeURIComponent(qq)}`);
-      const j = await r.json();
-      setRows(j.rows || []);
-    } catch {}
-  }
-  useEffect(() => { void refresh(""); }, []);
+    setMessages([
+      {
+        id: "msg-welcome",
+        role: "assistant",
+        text: welcomeText,
+        time,
+        chips: INITIAL_CHIPS,
+      },
+    ]);
+    setChips(INITIAL_CHIPS);
+  }, []);
 
-  function mic() {
-    const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    if (!SR) return say("Voice not supported here. Type instead — big buttons still work.");
-    const rec = new SR();
-    rec.lang = "en-US";
-    rec.onresult = (e: any) => setInput(e.results[0][0].transcript);
-    rec.start();
-    say("Listening. Speak now.");
-  }
+  useEffect(() => {
+    let alive = true;
+    void loadSession().then((s) => {
+      if (!alive) return;
+      if (!s) {
+        router.replace("/login");
+        return;
+      }
+      setSession(s);
+      setLoading(false);
+      initWelcome(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [router, initWelcome]);
 
-  async function parse() {
-    setMsgs((m) => [...m, { from: "you", text: input }]);
-    if (!navigator.onLine) {
-      setQueued((qq) => [...qq, { text: input, at: Date.now() }]);
-      return say("You're offline. Saved. It will send when you're back online.");
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  async function sendText(cmdText = input, chipKey?: string) {
+    if (!cmdText.trim()) return;
+
+    if (cmdText === "Configure Purpose Lock") {
+      router.push("/purpose-lock");
+      return;
     }
+
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const userMsgId = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setMessages((m) => [...m, { id: userMsgId, role: "user", text: cmdText, time }]);
+    setInput("");
+    setSending(true);
+
     try {
       const r = await fetch(`${API}/api/chat/parse`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input, note: "" }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cmdText, note: "" }),
       });
       const j = await r.json();
       setParsed(j);
-      if ((TAGS as readonly string[]).includes(j.tag)) setTag(j.tag);
-      say(`${j.lock_label}. $${j.amount_usd} ≈ ${j.fx_lrd} LRD. Fraud ${j.fraud_score}/100 — ${j.fraud_reason} Tap Hold & Pay.`);
+      say(
+        `I can lock $${j.amount_usd} USD for ${j.tag}. Review the purpose lock below — tap a tag to change it, then fund escrow.`,
+        { ...j, kind: "setup" },
+        ["Hold & Pay", "Configure Purpose Lock", "View Ledger"]
+      );
     } catch {
-      say("No connection. Your message is queued.");
+      say("No connection to AI service. Command saved to queue.");
+    } finally {
+      setSending(false);
     }
   }
 
   async function captureNow(eid: string, oid: string) {
+    if (!session) return;
     const c = await fetch(`${API}/api/escrow/capture`, {
-      method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
+      method: "POST",
+      headers: authHeaders(session.token),
       body: JSON.stringify({ escrow_id: eid, paypal_order_id: oid }),
     });
     const cj = await c.json();
     setEscrow((e: any) => ({ ...e, status: cj.status, capture_id: cj.capture_id }));
-    say(`Captured and HELD. Prove-first now: receiver picks Orange or MTN + uploads bill photo.`);
-    refresh();
+    say("Captured & HELD in PayPal sandbox escrow. Share the claim link below with the receiver.");
   }
 
   async function holdPay() {
     if (!session) {
-      say("Log in first — one tap with demo login. Then Hold & Pay.");
+      router.push("/login");
       return;
     }
-    const p = parsed || { amount_usd: 60, tag, note: input, recipient: "mom" };
+    const p = parsed || { amount_usd: 60, tag: "SCHOOL", note: "School tuition", recipient: "mom" };
     const r = await fetch(`${API}/api/escrow/create`, {
-      method: "POST", headers: authHeaders(session.token),
-      body: JSON.stringify({ amount_usd: p.amount_usd, tag: p.tag || tag, note: input, recipient: "mom" }),
+      method: "POST",
+      headers: authHeaders(session.token),
+      body: JSON.stringify({ amount_usd: p.amount_usd, tag: p.tag || "SCHOOL", note: p.note || "Transfer", recipient: "mom" }),
     });
     const j = await r.json();
     setEscrow(j);
     if (String(j.paypal_order_id || "").startsWith("MOCK-")) {
-      say(`Held, not released. Escrow ${j.escrow_id}. Mock PayPal order — capturing now.`);
+      say(`Held in escrow (${j.escrow_id}). Mock PayPal order created.`);
       await captureNow(j.escrow_id, j.paypal_order_id);
       return;
     }
-    say(`Order ${j.paypal_order_id} created. Approve in the PayPal button below, then we capture and HOLD.`);
-    refresh();
-  }
-
-  async function prove() {
-    if (!escrow?.escrow_id) return say("Hold & Pay first.");
-    if (!file) return say("Pick a bill photo first — prove-first always.");
-    const fd = new FormData();
-    fd.append("escrow_id", escrow.escrow_id);
-    fd.append("provider", provider);
-    fd.append("provider_number", pnumber);
-    fd.append("note", proofNote);
-    fd.append("proof", file);
-    try {
-      const r = await fetch(`${API}/api/escrow/prove`, { method: "POST", body: fd });
-      const j = await r.json();
-      setEscrow({ ...escrow, status: j.status });
-      say(j.verdict === "PASS"
-        ? `PASS — ${j.reason} MOCK MoMo ${j.mock_momo_txn_id} to ${provider} ${pnumber}.`
-        : `FAIL — ${j.reason} Retry once, or sender overrides.`);
-      refresh();
-    } catch {
-      say("Send failed. Check connection and retry.");
-    }
-  }
-
-  async function doOverride() {
-    setConfirmOverride(false);
-    const r = await fetch(`${API}/api/escrow/override`, {
-      method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
-      body: JSON.stringify({ escrow_id: escrow.escrow_id, reason: "Sender trusts receiver" }),
-    });
-    const j = await r.json();
-    setEscrow({ ...escrow, status: j.status });
-    say("Sender override: released anyway. Human stays boss.");
-    refresh();
-  }
-
-  async function doRefund() {
-    setConfirmRefund(false);
-    const r = await fetch(`${API}/api/escrow/refund`, {
-      method: "POST", headers: session ? authHeaders(session.token) : { "Content-Type": "application/json" },
-      body: JSON.stringify({ escrow_id: escrow.escrow_id }),
-    });
-    const j = await r.json();
-    setEscrow({ ...escrow, status: j.status });
-    say(`Refunded via PayPal (${j.refund_id || "mock"}).`);
-    refresh();
+    say(`PayPal Order ${j.paypal_order_id} created. Complete payment via PayPal button below.`);
   }
 
   function copyClaim() {
-    const url = `${window.location.origin}/claim/${escrow.escrow_id}`;
+    if (!escrow?.escrow_id) return;
+    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/claim/${escrow.escrow_id}`;
     void navigator.clipboard?.writeText(url).then(() => {
       setCopied(true);
-      say(`Claim link copied: ${url}`);
       setTimeout(() => setCopied(false), 2000);
-    }).catch(() => say(url));
+    }).catch(() => {});
+  }
+
+  function handleChipTap(chip: string) {
+    if (chip === "Hold & Pay") {
+      void holdPay();
+    } else if (chip === "View Ledger") {
+      router.push("/dashboard");
+    } else {
+      void sendText(chip);
+    }
+  }
+
+  function handleRecordTap() {
+    const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SR) return say("Voice recognition is not supported in this browser.");
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.onstart = () => setIsRecording(true);
+    rec.onend = () => setIsRecording(false);
+    rec.onresult = (e: any) => setInput(e.results[0][0].transcript);
+    rec.start();
+    say("Listening... Speak now.");
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-dvh w-full flex-col items-center justify-center gap-3">
+        <Sparkles className="size-8 text-brand-600 motion-safe:animate-bounce" />
+        <p className="text-sm font-semibold text-muted-foreground">Initializing OpenRouter AI Engine…</p>
+      </div>
+    );
   }
 
   return (
-    <div className={`${big ? "ezri-big" : ""} ${contrast ? "ezri-contrast" : ""} flex flex-col gap-6`}>
-      <div>
-        <p className="text-sm text-muted-foreground">{greeting()}{session ? `, ${session.name}` : ""}</p>
-        <h1 className="text-2xl font-bold tracking-tight text-annita-navy-900">
-          Send protected money
-        </h1>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Built for Africa. PayPal in where PayPal can&apos;t receive locally — mobile money out.
-          Talk. Lock. Prove. Prove-first always.
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Accessibility">
-          <button type="button" onClick={mic} className="btn btn-secondary btn-sm"><Mic aria-hidden="true" className="size-4" /> Speak</button>
-          <button type="button" onClick={() => setBig(!big)} aria-pressed={big} className="btn btn-secondary btn-sm"><Type aria-hidden="true" className="size-4" /> Big text</button>
-          <button type="button" onClick={() => setContrast(!contrast)} aria-pressed={contrast} className="btn btn-secondary btn-sm"><Contrast aria-hidden="true" className="size-4" /> Contrast</button>
-          <button type="button" onClick={() => setSimple(!simple)} aria-pressed={simple} className="btn btn-secondary btn-sm"><Languages aria-hidden="true" className="size-4" /> Simple words</button>
-          <span aria-live="polite" className="text-xs text-muted-foreground">
-            {online ? "Online" : "Offline — queuing"}{queued.length ? ` · Queued: ${queued.length}` : ""}
-          </span>
-          <span className="ml-auto text-xs text-muted-foreground">
-            {session ? (
-              <>Signed in as <b>{session.email}</b> <button type="button" onClick={() => { void clearSession().then(() => setSession(null)); }} className="btn btn-ghost btn-sm">Log out</button></>
-            ) : (
-              <><a href="/login" className="btn btn-ghost btn-sm">Log in</a><a href="/signup" className="btn btn-ghost btn-sm">Sign up</a></>
-            )}
-          </span>
+    <div className="flex flex-col h-full w-full min-h-0 relative bg-background overflow-hidden">
+      {/* Header Bar */}
+      <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0 sm:px-4 sm:py-3 z-10">
+        <div className="flex items-center gap-2">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold text-xs shadow-xs">
+            <Bot className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-foreground flex items-center gap-1">
+              Remittance AI
+              <Sparkles className="size-3.5 text-brand-600" />
+            </h1>
+            <p className="text-[11px] text-muted-foreground">OpenRouter AI Engine</p>
+          </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (session) initWelcome(session);
+            }}
+            className="p-2 rounded-lg hover:bg-muted transition text-foreground"
+            title="New Chat"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+          <Link href="/dashboard" className="p-2 rounded-lg hover:bg-muted transition text-foreground" title="Ledger">
+            <HistoryIcon className="h-5 w-5" />
+          </Link>
+        </div>
+      </header>
+
+      {/* Chat Scroll Thread - Flexible Fill */}
+      <div
+        ref={scrollRef}
+        className="scroll-thread flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-3 min-w-0 min-h-0 sm:px-4 sm:py-6 sm:space-y-4"
+      >
+        {messages.map((msg) => (
+          <ChatMessageItem
+            key={msg.id}
+            msg={msg}
+            sessionName={session?.name || "You"}
+            onHoldPay={() => void holdPay()}
+            onTagChange={(t) => setParsed((p: any) => (p ? { ...p, tag: t } : p))}
+          />
+        ))}
+
+        {/* Step 2 card: escrow session + claim link + PayPal approval */}
+        {escrow && (
+          <div className="flex justify-start">
+            <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
+              <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+                <span>Ezri AI</span>
+                <span className="text-[10px] text-muted-foreground/70">Escrow</span>
+              </div>
+              <div className="rounded-2xl border border-brand-300 bg-brand-50 p-4 text-foreground text-xs flex flex-col gap-3 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-brand-200 pb-2">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Step 2 · Escrow Session
+                    </span>
+                    <p className="font-mono text-xs font-extrabold">{escrow.escrow_id}</p>
+                  </div>
+                  <span className={statusBadge(escrow.status)}>{escrow.status}</span>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-bold text-foreground">
+                    Receiver Claim Link (Zero Login Needed)
+                  </span>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      readOnly
+                      value={`${typeof window !== "undefined" ? window.location.origin : ""}/claim/${escrow.escrow_id}`}
+                      className="input font-mono text-xs bg-surface flex-1 min-h-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={copyClaim}
+                      className="btn btn-primary shrink-0 gap-1 btn-sm"
+                    >
+                      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                      {copied ? "Copied" : "Copy Link"}
+                    </button>
+                    <a
+                      href={`/claim/${escrow.escrow_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary shrink-0 gap-1 btn-sm"
+                    >
+                      <ExternalLink className="size-3.5" /> Open
+                    </a>
+                  </div>
+                </div>
+
+                {escrow.status === "DRAFT" && (
+                  <div className="pt-2 border-t border-brand-200">
+                    <p className="font-bold text-xs mb-2">Complete Payment in PayPal Sandbox</p>
+                    <PayPalButtons
+                      orderId={escrow.paypal_order_id}
+                      clientId={PP_CID}
+                      onApproved={() => { void captureNow(escrow.escrow_id, escrow.paypal_order_id); }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3 card — final lock summary, only at the end of the transaction */}
+        {escrow && (escrow.status === "HELD" || escrow.status === "RELEASED") && (
+          <div className="flex justify-start">
+            <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
+              <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+                <span>Ezri AI</span>
+                <span className="text-[10px] text-muted-foreground/70">
+                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+              <div className="rounded-2xl border border-brand-300 bg-brand-50/70 p-4 text-foreground text-xs flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-brand-200 pb-2 font-bold">
+                  <span className="text-brand-700 flex items-center gap-1 text-sm">
+                    <Lock className="size-4" /> Locked for {parsed?.tag || "GENERAL"}
+                  </span>
+                  <span className="text-base font-extrabold">${parsed?.amount_usd ?? 60} USD</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block font-semibold">Payout Total</span>
+                    <span className="font-extrabold text-foreground">
+                      {Number(parsed?.fx_lrd ?? (parsed?.amount_usd ?? 60) * 192).toLocaleString()} LRD
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block font-semibold">Fraud Risk Assessment</span>
+                    <span className={`font-extrabold ${(parsed?.fraud_score ?? 10) >= 50 ? "text-danger" : "text-annita-green-dark"}`}>
+                      {parsed?.fraud_score ?? 10}/100{(parsed?.fraud_score ?? 10) < 50 ? " (Safe)" : ""}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-brand-200 pt-2 text-xs">
+                  <span className="font-bold text-foreground">Escrow Status</span>
+                  <span className={statusBadge(escrow.status)}>{escrow.status}</span>
+                </div>
+
+                {escrow.status === "RELEASED" && (
+                  <div className="rounded-xl border border-brand-200 bg-surface px-3 py-2 font-mono text-[11px] font-bold">
+                    {escrow.provider} · MoMo Ref: {escrow.mock_momo_txn_id || "—"}
+                  </div>
+                )}
+
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {escrow.status === "HELD"
+                    ? "Funds are held in PayPal sandbox escrow. Money moves only after the receiver's proof passes."
+                    : "Transaction complete. Mobile money released to the receiver."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Typing indicator */}
+        {sending && (
+          <div className="flex justify-start">
+            <div className="bg-surface border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-2xs">
+              <div className="flex gap-1.5 items-center">
+                <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <section aria-label="Chat" className="card">
-        <div ref={boxRef} className="flex max-h-72 flex-col gap-2 overflow-y-auto" role="log" aria-label="Conversation">
-          {msgs.map((m, i) => (
-            <p key={i} className={`rounded-xl px-4 py-3 text-sm leading-6 ${m.from === "ai" ? "bg-muted text-foreground" : "bg-annita-navy-800 text-white"}`}>
-              <b>{m.from === "ai" ? "Ezri: " : "You: "}</b>{m.text}
-            </p>
-          ))}
-        </div>
-        <form
-          id="send"
-          className="mt-3 flex gap-2"
-          onSubmit={(e) => { e.preventDefault(); void parse(); }}
-        >
-          <label htmlFor="msg" className="sr-only">Type a message</label>
-          <input
-            id="msg"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Send $60 to mom for school, lock it"
-            className="input"
-          />
-          <button type="submit" className="btn btn-primary shrink-0">Send</button>
-        </form>
-      </section>
-
-      <section aria-label="Purpose lock and escrow" className="card flex flex-col gap-4">
-        <div>
-          <h2 className="text-lg font-bold tracking-tight text-annita-navy-900">Purpose lock + escrow</h2>
-          <p className="hint">Money is held, never released, until proof passes.</p>
-        </div>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Purpose tags">
-          {TAGS.map((t) => (
+      {/* Quick Action Chips (always visible above input) */}
+      {chips.length > 0 && (
+        <div className="px-3 pb-2 flex flex-wrap gap-2 shrink-0 sm:px-4 sm:pb-2.5 sm:gap-2.5 bg-background">
+          {chips.map((chip) => (
             <button
-              key={t}
+              key={chip}
               type="button"
-              onClick={() => setTag(t)}
-              aria-pressed={tag === t}
-              className={`btn btn-sm ${tag === t ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => handleChipTap(chip)}
+              className="shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold border transition hover:opacity-80 whitespace-nowrap border-brand-300 text-brand-700 bg-brand-50"
             >
-              {t}
+              {chip}
             </button>
           ))}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button type="button" onClick={() => { void holdPay(); }} className="btn btn-primary btn-block sm:w-auto">Hold & Pay (PayPal sandbox)</button>
-          <button type="button" onClick={() => setConfirmRefund(true)} disabled={!escrow} className="btn btn-danger-outline">Refund</button>
-          <button type="button" onClick={() => setConfirmOverride(true)} disabled={!escrow} className="btn btn-secondary">Sender override</button>
-        </div>
-        {escrow && (
-          <div className="flex flex-col gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
-            <p>
-              Escrow <b className="font-mono">{escrow.escrow_id}</b>{" "}
-              <span className={statusBadge(escrow.status)}>{escrow.status}</span>{" "}
-              <span className="text-muted-foreground">Order {escrow.paypal_order_id}</span>
-            </p>
-            <p className="flex flex-wrap items-center gap-2">
-              Receiver claim link (no login): <code className="font-mono">/claim/{escrow.escrow_id}</code>
-              <button type="button" onClick={copyClaim} className="btn btn-secondary btn-sm">
-                {copied ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
-                {copied ? "Copied" : "Copy link"}
-              </button>
-            </p>
-          </div>
-        )}
-        {escrow && escrow.status === "DRAFT" && (
-          <>
-            <PayPalButtons orderId={escrow.paypal_order_id} clientId={PP_CID} onApproved={() => { void captureNow(escrow.escrow_id, escrow.paypal_order_id); }} />
-            {escrow.approval_url && (
-              <p className="text-sm"><a href={escrow.approval_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-700 hover:underline">Approve in PayPal (new tab fallback)</a></p>
-            )}
-          </>
-        )}
-      </section>
+      )}
 
-      <section aria-label="Prove first" className="card flex flex-col gap-4">
-        <div>
-          <h2 className="text-lg font-bold tracking-tight text-annita-navy-900">Receiver: prove-first, then pick provider</h2>
-          <p className="hint">Upload the bill before money moves. Always.</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="provider" className="label">Provider</label>
-            <select id="provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
-              <option>MTN</option>
-              <option>ORANGE</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="pnumber" className="label">MoMo number</label>
-            <input id="pnumber" value={pnumber} onChange={(e) => setPnumber(e.target.value)} inputMode="tel" className="input font-mono" />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="proof" className="label">Bill / invoice photo (required)</label>
-          <input id="proof" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-sm" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="proofnote" className="label">Proof note</label>
-          <input id="proofnote" value={proofNote} onChange={(e) => setProofNote(e.target.value)} className="input" />
-        </div>
-        <button type="button" onClick={() => { void prove(); }} className="btn btn-primary btn-lg btn-block sm:w-auto">Verify & Release</button>
-      </section>
+      {/* Sticky Chat Input Bar - ALWAYS PINNED AT BOTTOM */}
+      <div className="sticky bottom-0 left-0 right-0 z-20 bg-surface px-3 pt-2 pb-3 shrink-0 border-t border-border shadow-md">
+        <div className="flex items-end gap-2 max-w-full overflow-hidden">
+          {/* Pill container */}
+          <div className="flex-1 flex items-center bg-muted/60 rounded-full min-h-[44px] max-h-[44px] px-2 py-1.5 border border-border overflow-hidden min-w-0">
+            {/* Audio Lines button */}
+            <button
+              type="button"
+              onClick={handleRecordTap}
+              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition ${
+                isRecording ? "bg-danger text-white animate-pulse" : "hover:bg-muted text-muted-foreground"
+              }`}
+            >
+              <AudioLines className="h-5 w-5" />
+            </button>
 
-      <section aria-label="Live ledger" id="ledger" className="card flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg font-bold tracking-tight text-annita-navy-900">Live ledger</h2>
-          <p className="hint">Ask in plain words. Try: risky, school, mom.</p>
-        </div>
-        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void refresh(); }}>
-          <label htmlFor="ask" className="sr-only">Ask your ledger</label>
-          <input id="ask" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Try: risky, school, mom" className="input" />
-          <button type="submit" className="btn btn-secondary shrink-0">Ask</button>
-        </form>
-        <div className="ag-theme-quartz h-64">
-          <AgGridReact
-            rowData={rows}
-            columnDefs={[
-              { field: "id", headerName: "Escrow", flex: 1 },
-              { field: "tag", width: 110 },
-              { field: "amount_usd", headerName: "$", width: 80 },
-              { field: "status", width: 130 },
-              { field: "provider", width: 100 },
-              { field: "mock_momo_txn_id", headerName: "MoMo (MOCK)", flex: 1 },
-            ]}
-          />
-        </div>
-        <p className="hint">Demo: PayPal sandbox real when keys set, else MOCK. MoMo always MOCK in contest. Expiry 10 min in demo = 48h production.</p>
-      </section>
+            {/* Text input */}
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void sendText();
+                }
+              }}
+              placeholder="Send $60 to mom for school, lock it"
+              className="flex-1 bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 min-w-0 w-full"
+            />
 
-      <Modal
-        open={confirmRefund}
-        onClose={() => setConfirmRefund(false)}
-        title="Refund this transfer?"
-        description="The PayPal capture will be refunded to the sender. This cannot be undone."
-        actions={
-          <>
-            <button type="button" onClick={() => setConfirmRefund(false)} className="btn btn-secondary btn-block sm:w-auto">Keep holding</button>
-            <button type="button" onClick={() => { void doRefund(); }} className="btn btn-danger btn-block sm:w-auto">Yes, refund</button>
-          </>
-        }
-      />
-      <Modal
-        open={confirmOverride}
-        onClose={() => setConfirmOverride(false)}
-        title="Release despite FAIL?"
-        description="The AI check did not pass. Releasing anyway records a sender override on the ledger."
-        actions={
-          <>
-            <button type="button" onClick={() => setConfirmOverride(false)} className="btn btn-secondary btn-block sm:w-auto">Keep holding</button>
-            <button type="button" onClick={() => { void doOverride(); }} className="btn btn-primary btn-block sm:w-auto">Release anyway</button>
-          </>
-        }
-      />
+            {/* Mic record button */}
+            <button
+              type="button"
+              onClick={handleRecordTap}
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 hover:bg-muted transition text-muted-foreground"
+            >
+              <Mic className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Send circle button */}
+          <button
+            type="button"
+            onClick={() => void sendText()}
+            className="w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 bg-brand-600 text-white transition hover:bg-brand-700 shadow-sm active:scale-95 cursor-pointer"
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

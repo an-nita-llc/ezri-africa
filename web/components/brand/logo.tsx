@@ -1,26 +1,43 @@
 type LogoSize = "sm" | "md" | "lg";
 
-const sizes: Record<LogoSize, { box: string; text: string }> = {
-  sm: { box: "size-8", text: "text-lg" },
-  md: { box: "size-10", text: "text-xl" },
-  lg: { box: "size-14", text: "text-3xl" },
+const sizes: Record<LogoSize, { box: string; image: number }> = {
+  sm: { box: "size-8", image: 32 },
+  md: { box: "size-10", image: 40 },
+  lg: { box: "size-14", image: 56 },
 };
 
-export function LogoMark({ size = "md" }: { size?: LogoSize }) {
-  const { box, text } = sizes[size];
+export function LogoMark({
+  size = "md",
+  full = false,
+}: {
+  size?: LogoSize;
+  full?: boolean;
+}) {
+  const { box, image } = sizes[size];
   return (
     <span
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-annita-navy-700 to-annita-navy-950 font-bold text-white shadow-sm ring-1 ring-black/5 ${box} ${text}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5 ${box}`}
     >
-      E
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={full ? "/brand/annita-logo.png" : "/brand/annita-mark.png"}
+        alt=""
+        width={image}
+        height={image}
+        className="h-full w-full object-contain p-1"
+        onError={(e) => {
+          // Fallback if image asset fails
+          e.currentTarget.style.display = "none";
+        }}
+      />
     </span>
   );
 }
 
 export function Logo({
   size = "md",
-  textClassName = "text-annita-navy-900",
+  textClassName = "text-brand-700",
   subtext,
   subtextClassName = "text-muted-foreground",
 }: {
@@ -41,7 +58,9 @@ export function Logo({
           Ezri Africa
         </span>
         {subtext ? (
-          <span className={`block text-xs ${subtextClassName}`}>{subtext}</span>
+          <span className={`block text-xs ${subtextClassName}`}>
+            {subtext}
+          </span>
         ) : null}
       </span>
     </span>
