@@ -2,20 +2,20 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { get as idbGet, set as idbSet } from "idb-keyval";
 import {
   AudioLines,
   Bot,
   Check,
-  ChevronRight,
   Copy,
   ExternalLink,
   History as HistoryIcon,
+  Loader2,
   Lock,
   Mic,
+  Pause,
   Plus,
   Send,
-  ShieldCheck,
+  ShieldAlert,
   Sparkles,
   Zap,
 } from "lucide-react";
@@ -25,6 +25,7 @@ import { authHeaders, loadSession, type Session } from "./session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const PP_CID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
+const DEMO_PIN = "1234";
 
 const INITIAL_CHIPS = [
   "Send $60 to mom for school",
@@ -43,6 +44,8 @@ interface Message {
   chips?: string[];
 }
 
+type AgentStep = { label: string; status: "queued" | "running" | "done" };
+
 function greeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -50,24 +53,175 @@ function greeting() {
   return "Good evening";
 }
 
+function now() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function statusBadge(status: string) {
   const base = "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tracking-wide ";
   if (status === "RELEASED") return `${base}bg-annita-green/15 text-annita-green-dark border border-annita-green/30`;
   if (status === "HELD") return `${base}bg-brand-100 text-brand-900 border border-brand-300`;
   if (status === "NEEDS_RETRY" || status === "EXPIRED") return `${base}bg-danger/10 text-danger border border-danger/30`;
-  if (status === "REFUNDED") return `${base}bg-muted text-muted-foreground border border-border`;
   return `${base}bg-muted text-muted-foreground border border-border`;
 }
 
+/* ── Live agent activity panel (terminal style, like watching AI code) ── */
+function AgentActivityCard({ run }: { run: { title: string; steps: AgentStep[] } }) {
+  return (
+    <div className="flex justify-start">
+      <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
+        <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+          <span>Ezri AI Agent</span>
+          <span className="text-[10px] text-muted-foreground/70">{now()}</span>
+        </div>
+        <div className="rounded-2xl border border-annita-navy-800 bg-annita-navy-950 p-4 font-mono text-xs text-white/90 flex flex-col gap-2.5 shadow-2xs">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-brand-300">
+              <Bot aria-hidden="true" className="size-4" /> {run.title}
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] text-white/50">
+              <span className="size-1.5 rounded-full bg-annita-green animate-pulse" />
+              live
+            </span>
+          </div>
+          {run.steps.map((step, i) => (
+            <div key={i} className="flex items-start gap-2">
+              {step.status === "done" ? (
+                <Check aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-annita-green" />
+              ) : step.status === "running" ? (
+                <Loader2 aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 animate-spin text-brand-300" />
+              ) : (
+                <span aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-center leading-none text-white/30">·</span>
+              )}
+              <span className={step.status === "queued" ? "text-white/40" : ""}>{step.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Approval gate — the agent always pauses before money moves ── */
+function ApprovalCard({
+  approval,
+  pinStage,
+  pin,
+  pinError,
+  onApprove,
+  onConfirmPin,
+  onBack,
+  onCancel,
+  onPinChange,
+}: {
+  approval: { amount: number; tag: string };
+  pinStage: boolean;
+  pin: string;
+  pinError: string;
+  onApprove: () => void;
+  onConfirmPin: () => void;
+  onBack: () => void;
+  onCancel: () => void;
+  onPinChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex justify-start">
+      <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
+        <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
+          <span>Ezri AI Agent</span>
+          <span className="text-[10px] text-muted-foreground/70">paused</span>
+        </div>
+        <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-4 text-xs flex flex-col gap-3 shadow-2xs">
+          <div className="flex items-center justify-between border-b border-amber-200 pb-2 font-bold">
+            <span className="flex items-center gap-1.5 text-sm text-amber-800">
+              <Pause aria-hidden="true" className="size-4" /> Agent paused — approval required
+            </span>
+            <span className="text-base font-extrabold text-amber-950">${approval.amount} USD</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <span className="block font-semibold text-muted-foreground">Action</span>
+              <span className="font-extrabold text-foreground">PayPal → escrow hold</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-muted-foreground">Purpose Lock</span>
+              <span className="font-extrabold text-foreground">{approval.tag}</span>
+            </div>
+          </div>
+
+          {!pinStage ? (
+            <>
+              <p className="text-[11px] leading-relaxed text-amber-900/80">
+                I will not move money without your approval. Confirm to continue to PIN entry.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onApprove}
+                  className="btn btn-primary btn-sm gap-1"
+                >
+                  <ShieldAlert aria-hidden="true" className="size-3.5" /> Approve &amp; enter PIN
+                </button>
+                <button type="button" onClick={onCancel} className="btn btn-secondary btn-sm">
+                  Cancel — move nothing
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="agent-pin" className="font-bold text-foreground">
+                  Enter your 4-digit money PIN
+                </label>
+                <input
+                  id="agent-pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => onPinChange(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+                  placeholder="••••"
+                  className="input text-center font-mono text-xl font-bold tracking-[0.6em]"
+                />
+                {pinError ? <p className="text-[11px] font-bold text-danger">{pinError}</p> : null}
+                <p className="text-[11px] text-muted-foreground">Demo PIN: 1234</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onConfirmPin}
+                  className="btn btn-primary btn-sm gap-1"
+                >
+                  <Zap aria-hidden="true" className="size-3.5" /> Confirm PIN &amp; move money
+                </button>
+                <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">
+                  Back
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Chat message with embedded Step 1 card ── */
 function ChatMessageItem({
   msg,
   sessionName,
-  onHoldPay,
+  onRequestPay,
   onTagChange,
 }: {
   msg: Message;
   sessionName: string;
-  onHoldPay: () => void;
+  onRequestPay: () => void;
   onTagChange: (tag: string) => void;
 }) {
   return (
@@ -138,10 +292,10 @@ function ChatMessageItem({
 
               <button
                 type="button"
-                onClick={onHoldPay}
+                onClick={onRequestPay}
                 className="btn btn-primary btn-block gap-2 text-sm font-bold shadow-sm"
               >
-                <Zap className="size-4" /> Step 2 · Lock Purpose & Fund Escrow
+                <Zap className="size-4" /> Step 2 · Request Escrow (agent asks approval + PIN)
               </button>
             </div>
           )}
@@ -165,12 +319,18 @@ export default function PlugPage() {
   const [copied, setCopied] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
+  // Live agent activity + approval gates
+  const [agentRun, setAgentRun] = useState<{ title: string; steps: AgentStep[] } | null>(null);
+  const [approval, setApproval] = useState<{ amount: number; tag: string } | null>(null);
+  const [pinStage, setPinStage] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState("");
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const say = useCallback((text: string, cardData?: any, chipsList?: string[]) => {
-    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setMessages((m) => [...m, { id, role: "assistant", text, time, card: cardData, chips: chipsList }]);
+    setMessages((m) => [...m, { id, role: "assistant", text, time: now(), card: cardData, chips: chipsList }]);
     if (chipsList) setChips(chipsList);
     try {
       const u = new SpeechSynthesisUtterance(text);
@@ -180,7 +340,6 @@ export default function PlugPage() {
   }, []);
 
   const initWelcome = useCallback((s: Session) => {
-    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const welcomeText = `${greeting()}, ${s.name || "Demo Sender"}\n\nPurpose-Locked Remittance\nPayPal foreign collection → AI purpose lock → Strict proof check → Mobile Money disburse\n\nLive FX Rate: 1 USD = 192.00 LRD`;
 
     setMessages([
@@ -188,11 +347,15 @@ export default function PlugPage() {
         id: "msg-welcome",
         role: "assistant",
         text: welcomeText,
-        time,
+        time: now(),
         chips: INITIAL_CHIPS,
       },
     ]);
     setChips(INITIAL_CHIPS);
+    setEscrow(null);
+    setParsed(null);
+    setApproval(null);
+    setAgentRun(null);
   }, []);
 
   useEffect(() => {
@@ -214,9 +377,25 @@ export default function PlugPage() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  }, [messages, agentRun, approval, escrow]);
 
-  async function sendText(cmdText = input, chipKey?: string) {
+  /** Advance the live agent steps one by one (like watching AI code). */
+  async function advanceSteps(total: number, ms: number) {
+    for (let i = 0; i < total; i++) {
+      await sleep(ms);
+      setAgentRun((run) => {
+        if (!run) return run;
+        const steps = run.steps.map((s, idx) => ({
+          ...s,
+          status: (idx < i + 1 ? "done" : idx === i + 1 ? "running" : s.status) as AgentStep["status"],
+        }));
+        return { ...run, steps };
+      });
+    }
+    await sleep(320);
+  }
+
+  async function sendText(cmdText = input) {
     if (!cmdText.trim()) return;
 
     if (cmdText === "Configure Purpose Lock") {
@@ -224,12 +403,21 @@ export default function PlugPage() {
       return;
     }
 
-    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const userMsgId = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setMessages((m) => [...m, { id: userMsgId, role: "user", text: cmdText, time }]);
+    setMessages((m) => [...m, { id: `usr-${Date.now()}`, role: "user", text: cmdText, time: now() }]);
     setInput("");
     setSending(true);
+    setAgentRun({
+      title: "Analyzing your request",
+      steps: [
+        { label: "Reading message intent", status: "running" },
+        { label: "Extracting amount & recipient", status: "queued" },
+        { label: "Fetching live FX rate (USD → LRD)", status: "queued" },
+        { label: "Running fraud risk model", status: "queued" },
+        { label: "Applying purpose lock rules", status: "queued" },
+      ],
+    });
 
+    const agentDone = advanceSteps(5, 480);
     try {
       const r = await fetch(`${API}/api/chat/parse`, {
         method: "POST",
@@ -237,13 +425,17 @@ export default function PlugPage() {
         body: JSON.stringify({ text: cmdText, note: "" }),
       });
       const j = await r.json();
+      await agentDone;
+      setAgentRun(null);
       setParsed(j);
       say(
-        `I can lock $${j.amount_usd} USD for ${j.tag}. Review the purpose lock below — tap a tag to change it, then fund escrow.`,
+        `I can lock $${j.amount_usd} USD for ${j.tag}. Review the purpose lock below — tap a tag to change it. Nothing moves until you approve and enter your PIN.`,
         { ...j, kind: "setup" },
         ["Hold & Pay", "Configure Purpose Lock", "View Ledger"]
       );
     } catch {
+      await agentDone;
+      setAgentRun(null);
       say("No connection to AI service. Command saved to queue.");
     } finally {
       setSending(false);
@@ -262,25 +454,76 @@ export default function PlugPage() {
     say("Captured & HELD in PayPal sandbox escrow. Share the claim link below with the receiver.");
   }
 
-  async function holdPay() {
+  /** Step 2 request — the agent NEVER moves money here; it pauses for approval. */
+  function requestPay() {
     if (!session) {
       router.push("/login");
       return;
     }
     const p = parsed || { amount_usd: 60, tag: "SCHOOL", note: "School tuition", recipient: "mom" };
-    const r = await fetch(`${API}/api/escrow/create`, {
-      method: "POST",
-      headers: authHeaders(session.token),
-      body: JSON.stringify({ amount_usd: p.amount_usd, tag: p.tag || "SCHOOL", note: p.note || "Transfer", recipient: "mom" }),
-    });
-    const j = await r.json();
-    setEscrow(j);
-    if (String(j.paypal_order_id || "").startsWith("MOCK-")) {
-      say(`Held in escrow (${j.escrow_id}). Mock PayPal order created.`);
-      await captureNow(j.escrow_id, j.paypal_order_id);
+    setApproval({ amount: p.amount_usd, tag: p.tag || "SCHOOL" });
+    setPinStage(false);
+    setPin("");
+    setPinError("");
+    say("Paused before moving money. Review the approval request below — you are always in control.");
+  }
+
+  /** After approval + correct PIN, the agent runs the money movement live. */
+  async function executePay() {
+    if (pin !== DEMO_PIN) {
+      setPinError("Wrong PIN. Your demo PIN is 1234.");
       return;
     }
-    say(`PayPal Order ${j.paypal_order_id} created. Complete payment via PayPal button below.`);
+    setApproval(null);
+    setPinStage(false);
+    setPin("");
+    setPinError("");
+
+    const p = parsed || { amount_usd: 60, tag: "SCHOOL", note: "Transfer", recipient: "mom" };
+    setAgentRun({
+      title: "Moving money — PayPal sandbox escrow",
+      steps: [
+        { label: "PIN verified · approval recorded on ledger", status: "running" },
+        { label: "Authenticating PayPal sandbox session", status: "queued" },
+        { label: `Creating order for $${p.amount_usd} USD`, status: "queued" },
+        { label: "Capturing funds into escrow", status: "queued" },
+        { label: "Locking purpose & generating claim link", status: "queued" },
+      ],
+    });
+
+    const agentDone = advanceSteps(5, 620);
+    try {
+      const r = await fetch(`${API}/api/escrow/create`, {
+        method: "POST",
+        headers: authHeaders(session!.token),
+        body: JSON.stringify({
+          amount_usd: p.amount_usd,
+          tag: p.tag || "SCHOOL",
+          note: p.note || "Transfer",
+          recipient: p.recipient || "mom",
+        }),
+      });
+      const j = await r.json();
+      setEscrow(j);
+      if (String(j.paypal_order_id || "").startsWith("MOCK-")) {
+        await captureNow(j.escrow_id, j.paypal_order_id);
+      } else {
+        say(`PayPal Order ${j.paypal_order_id} created. Approve it via the PayPal button in the escrow card.`);
+      }
+    } catch {
+      say("Payment step failed — no money moved. Try again once you're back online.");
+    } finally {
+      await agentDone;
+      setAgentRun(null);
+    }
+  }
+
+  function cancelPay() {
+    setApproval(null);
+    setPinStage(false);
+    setPin("");
+    setPinError("");
+    say("Cancelled — nothing moved. I'll wait here whenever you're ready.");
   }
 
   function copyClaim() {
@@ -294,7 +537,7 @@ export default function PlugPage() {
 
   function handleChipTap(chip: string) {
     if (chip === "Hold & Pay") {
-      void holdPay();
+      requestPay();
     } else if (chip === "View Ledger") {
       router.push("/dashboard");
     } else {
@@ -316,7 +559,7 @@ export default function PlugPage() {
 
   if (loading) {
     return (
-      <div className="flex h-dvh w-full flex-col items-center justify-center gap-3">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3">
         <Sparkles className="size-8 text-brand-600 motion-safe:animate-bounce" />
         <p className="text-sm font-semibold text-muted-foreground">Initializing OpenRouter AI Engine…</p>
       </div>
@@ -324,9 +567,9 @@ export default function PlugPage() {
   }
 
   return (
-    <div className="flex flex-col h-full w-full min-h-0 relative bg-background overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background">
       {/* Header Bar */}
-      <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0 sm:px-4 sm:py-3 z-10">
+      <header className="flex shrink-0 items-center justify-between border-b border-border bg-surface px-3 py-2 sm:px-4 sm:py-3 z-10">
         <div className="flex items-center gap-2">
           <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold text-xs shadow-xs">
             <Bot className="size-5" />
@@ -357,7 +600,7 @@ export default function PlugPage() {
         </div>
       </header>
 
-      {/* Chat Scroll Thread - Flexible Fill */}
+      {/* Chat Scroll Thread */}
       <div
         ref={scrollRef}
         className="scroll-thread flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-3 min-w-0 min-h-0 sm:px-4 sm:py-6 sm:space-y-4"
@@ -367,10 +610,35 @@ export default function PlugPage() {
             key={msg.id}
             msg={msg}
             sessionName={session?.name || "You"}
-            onHoldPay={() => void holdPay()}
+            onRequestPay={requestPay}
             onTagChange={(t) => setParsed((p: any) => (p ? { ...p, tag: t } : p))}
           />
         ))}
+
+        {/* Live agent activity — visible while the AI works */}
+        {agentRun && <AgentActivityCard run={agentRun} />}
+
+        {/* Approval gate — agent stops here before any money movement */}
+        {approval && (
+          <ApprovalCard
+            approval={approval}
+            pinStage={pinStage}
+            pin={pin}
+            pinError={pinError}
+            onApprove={() => setPinStage(true)}
+            onConfirmPin={() => void executePay()}
+            onBack={() => {
+              setPinStage(false);
+              setPin("");
+              setPinError("");
+            }}
+            onCancel={cancelPay}
+            onPinChange={(v) => {
+              setPin(v);
+              setPinError("");
+            }}
+          />
+        )}
 
         {/* Step 2 card: escrow session + claim link + PayPal approval */}
         {escrow && (
@@ -441,9 +709,7 @@ export default function PlugPage() {
             <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
               <div className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground">
                 <span>Ezri AI</span>
-                <span className="text-[10px] text-muted-foreground/70">
-                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
+                <span className="text-[10px] text-muted-foreground/70">{now()}</span>
               </div>
               <div className="rounded-2xl border border-brand-300 bg-brand-50/70 p-4 text-foreground text-xs flex flex-col gap-3">
                 <div className="flex items-center justify-between border-b border-brand-200 pb-2 font-bold">
@@ -489,8 +755,8 @@ export default function PlugPage() {
           </div>
         )}
 
-        {/* Typing indicator */}
-        {sending && (
+        {/* Typing indicator (hidden while the live agent card is showing) */}
+        {sending && !agentRun && (
           <div className="flex justify-start">
             <div className="bg-surface border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-2xs">
               <div className="flex gap-1.5 items-center">
@@ -519,8 +785,8 @@ export default function PlugPage() {
         </div>
       )}
 
-      {/* Sticky Chat Input Bar - ALWAYS PINNED AT BOTTOM */}
-      <div className="sticky bottom-0 left-0 right-0 z-20 bg-surface px-3 pt-2 pb-3 shrink-0 border-t border-border shadow-md">
+      {/* Chat Input Bar — fixed flex position, never jumps */}
+      <div className="shrink-0 bg-surface px-3 pt-2 pb-3 border-t border-border">
         <div className="flex items-end gap-2 max-w-full overflow-hidden">
           {/* Pill container */}
           <div className="flex-1 flex items-center bg-muted/60 rounded-full min-h-[44px] max-h-[44px] px-2 py-1.5 border border-border overflow-hidden min-w-0">

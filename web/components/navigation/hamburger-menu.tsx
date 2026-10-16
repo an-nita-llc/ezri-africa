@@ -16,6 +16,7 @@ import {
   Menu,
   MessageSquare,
   Mic,
+  Settings,
   ShieldCheck,
   Sliders,
   Type,
@@ -181,6 +182,19 @@ export function HamburgerMenu({
                 >
                   <History className="size-5 text-brand-600" />
                   <span>Transfers Ledger</span>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/settings"
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                    pathname === "/settings"
+                      ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                      : "text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Settings className="size-5 text-brand-600" />
+                  <span>App Settings</span>
                 </Link>
               </li>
             </ul>

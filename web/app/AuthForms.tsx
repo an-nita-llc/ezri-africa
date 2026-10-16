@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, Lock, MailCheck, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, Lock, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authButtonClass, authInputClass } from "@/components/auth/classes";
@@ -134,18 +134,16 @@ export function LoginForm() {
 export function OtpSignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState<"details" | "code">("details");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
 
   function destination() {
     const next = searchParams.get("next");
     return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
   }
 
+  /** Request the code, then hand off to the dedicated /verify-otp page. */
   async function requestCode(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -154,112 +152,10 @@ export function OtpSignInForm() {
       return;
     }
     setPending(true);
-    try {
-      // Demo OTP flow
-      setStep("code");
-      setCooldown(30);
-      const timer = setInterval(() => {
-        setCooldown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function verifyCode(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    const digits = code.replace(/[^0-9]/g, "");
-    if (digits.length !== 6) {
-      setError("Enter the 6-digit code from your email.");
-      return;
-    }
-    setPending(true);
-    try {
-      const j = await post("/api/auth/demo");
-      if (j.token && j.user) {
-        await saveSession({ token: j.token, email: email.trim(), name: j.user.name });
-        router.push(destination());
-        router.refresh();
-      } else {
-        setError("Invalid code. Try again.");
-      }
-    } catch {
-      setError("No connection to API.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  if (step === "code") {
-    return (
-      <form onSubmit={verifyCode} className="flex flex-col gap-5" noValidate>
-        {error ? <ErrorAlert message={error} /> : null}
-        <div
-          role="status"
-          className="flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700"
-        >
-          <MailCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-          <span>
-            A 6-digit code is on its way to <strong>{email.trim()}</strong>. It expires in 5 minutes.
-          </span>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="otp-code" className="text-sm font-medium">
-            6-digit code
-          </label>
-          <input
-            id="otp-code"
-            name="otp-code"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            required
-            value={code}
-            onChange={(event) =>
-              setCode(event.target.value.replace(/[^0-9]/g, "").slice(0, 6))
-            }
-            placeholder="••••••"
-            className={`${authInputClass} text-center text-2xl font-bold tracking-[0.5em]`}
-          />
-          <p className="text-xs text-muted-foreground">
-            Never share this code — Ezri staff will never ask for it.
-          </p>
-        </div>
-        <button type="submit" disabled={pending} className={authButtonClass}>
-          {pending ? (
-            <>
-              <Loader2 aria-hidden="true" className="size-4 motion-safe:animate-spin" />
-              Verifying…
-            </>
-          ) : (
-            "Verify and sign in"
-          )}
-        </button>
-        <div className="flex items-center justify-between text-sm">
-          <button
-            type="button"
-            onClick={() => {
-              setStep("details");
-              setCode("");
-              setError(null);
-            }}
-            className="font-medium text-brand-700 hover:underline"
-          >
-            Use different email
-          </button>
-          <span className="text-muted-foreground">
-            {cooldown > 0 ? `Resend available in ${cooldown}s` : "No code?"}
-          </span>
-        </div>
-      </form>
-    );
+    const params = new URLSearchParams({ email: email.trim() });
+    const dest = destination();
+    if (dest !== "/") params.set("next", dest);
+    router.push(`/verify-otp?${params.toString()}`);
   }
 
   return (
@@ -512,6 +408,7 @@ export function SignupForm() {
   const [location, setLocation] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   useRedirectIfAuthed();
@@ -529,6 +426,18 @@ export function SignupForm() {
     }
     if (!location.trim()) {
       setError("Please enter your city or location.");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (password.length < 4) {
+      setError("Use at least 4 characters for your password.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("The passwords don't match. Try again.");
       return;
     }
     setPending(true);
@@ -681,6 +590,16 @@ export function SignupForm() {
             autoComplete="new-password"
             minLength={4}
             hint="At least 4 characters for demo mode."
+          />
+          <PasswordField
+            id="signup-confirm-password"
+            name="confirmPassword"
+            label="Confirm password"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            autoComplete="new-password"
+            minLength={4}
+            hint="Re-enter your password to confirm."
           />
         </div>
 

@@ -11,6 +11,7 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** Bottom nav — 4 items, only visible when the sender is signed in. */
 export function BottomNav() {
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
@@ -19,17 +20,15 @@ export function BottomNav() {
     void loadSession().then(setSession);
   }, [pathname]);
 
-  const items = session
-    ? mobileNavItems.filter((i) => i.href === "/" || i.href === "/dashboard")
-    : mobileNavItems;
+  if (!session) return null;
 
   return (
     <nav
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      <ul className={`grid ${items.length === 2 ? "grid-cols-2" : "grid-cols-4"}`}>
-        {items.map((item) => {
+      <ul className="grid grid-cols-4">
+        {mobileNavItems.map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
           return (
