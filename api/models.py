@@ -14,10 +14,15 @@ class ParseIn(BaseModel):
 
 
 class ParseOut(BaseModel):
+    intent: Literal["transfer", "needs_amount", "greeting", "fees", "escrow", "help", "status", "chat"] = "transfer"
+    reply: str = ""
     tag: Tag = "GENERAL"
     amount_usd: float = 60.0
     recipient: str = "mom"
     fx_lrd: float = 0.0
+    fee_usd: float = 1.2
+    fee_pct: float = 2.0
+    total_usd: float = 61.2
     fraud_score: int = 10
     fraud_reason: str = "Small first send. No red flags."
     lock_label: str = "Locked for GENERAL"

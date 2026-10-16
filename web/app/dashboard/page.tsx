@@ -25,9 +25,14 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
+import { FEE_PCT_LABEL, feeOf, lrdOf, totalOf } from "../fx";
 import { authHeaders, loadSession, type Session } from "../session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+/** Row fee: stored value for new rows, 2% fallback for seeds created before the fee column. */
+const rowFee = (amountUsd: number, feeUsd?: number) =>
+  Number(feeUsd) > 0 ? Number(feeUsd) : feeOf(Number(amountUsd) || 0);
 
 const TAG_OPTIONS = [
   { id: "ALL", label: "All Categories" },
@@ -235,6 +240,7 @@ export default function DashboardPage() {
 
   // Financial Metrics Calculation
   const totalVolume = rows.reduce((acc, r) => acc + (r.amount_usd || 0), 0);
+  const totalFees = rows.reduce((acc, r) => acc + rowFee(r.amount_usd, r.fee_usd), 0);
   const heldVolume = rows
     .filter((r) => r.status === "HELD")
     .reduce((acc, r) => acc + (r.amount_usd || 0), 0);
@@ -296,7 +302,10 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3">
             <p className="text-2xl font-extrabold tracking-tight text-foreground">${totalVolume.toFixed(2)} USD</p>
-            <p className="text-xs text-muted-foreground mt-0.5">≈ {(totalVolume * 192).toLocaleString()} LRD total sent</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              ≈ {lrdOf(totalVolume).toLocaleString()} LRD · Ezri fee {FEE_PCT_LABEL}% = $
+              {totalFees.toFixed(2)}
+            </p>
           </div>
         </div>
 
@@ -446,7 +455,23 @@ export default function DashboardPage() {
                     Payout
                   </span>
                   <span className="text-lg font-extrabold text-foreground">
-                    {(r.amount_usd * 192).toLocaleString()} LRD
+                    {lrdOf(r.amount_usd).toLocaleString()} LRD
+                  </span>
+                </div>
+                <div>
+                  <span className="block font-bold uppercase tracking-wider text-muted-foreground">
+                    Ezri fee ({FEE_PCT_LABEL}%)
+                  </span>
+                  <span className="text-sm font-extrabold text-foreground">
+                    ${rowFee(r.amount_usd, r.fee_usd).toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block font-bold uppercase tracking-wider text-muted-foreground">
+                    Sender charged
+                  </span>
+                  <span className="text-sm font-extrabold text-foreground">
+                    ${totalOf(r.amount_usd).toFixed(2)} USD
                   </span>
                 </div>
               </div>

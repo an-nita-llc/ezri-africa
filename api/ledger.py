@@ -5,12 +5,15 @@ import sqlite3
 import time
 import uuid
 
+from ai_guard import FEE_PCT  # single source of truth: 2% platform fee
+
 DB = os.environ.get("EZRI_DB", os.path.join(os.path.dirname(__file__), "ezri.db"))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS escrows(
   id TEXT PRIMARY KEY,
   amount_usd REAL NOT NULL,
+  fee_usd REAL NOT NULL DEFAULT 0,
   tag TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
   recipient TEXT NOT NULL DEFAULT 'mom',
@@ -46,6 +49,7 @@ def _db() -> sqlite3.Connection:
     con.executescript(SCHEMA)
     for ddl in (
         "ALTER TABLE escrows ADD COLUMN sender_email TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE escrows ADD COLUMN fee_usd REAL NOT NULL DEFAULT 0",
     ):
         try:
             con.execute(ddl)
@@ -57,10 +61,11 @@ def _db() -> sqlite3.Connection:
 def create_escrow(amount_usd: float, tag: str, note: str, recipient: str, expiry_minutes: int, sender_email: str = "") -> dict:
     now = time.time()
     eid = "EZR-" + uuid.uuid4().hex[:8].upper()
+    fee_usd = round(amount_usd * FEE_PCT, 2)  # Ezri takes 2% of every transaction
     with _db() as con:
         con.execute(
-            "INSERT INTO escrows(id,amount_usd,tag,note,recipient,status,sender_email,created_at,expires_at) VALUES(?,?,?,?,?,'DRAFT',?,?,?)",
-            (eid, amount_usd, tag, note, recipient, sender_email, now, now + expiry_minutes * 60),
+            "INSERT INTO escrows(id,amount_usd,fee_usd,tag,note,recipient,status,sender_email,created_at,expires_at) VALUES(?,?,?,?,?,?,'DRAFT',?,?,?)",
+            (eid, amount_usd, fee_usd, tag, note, recipient, sender_email, now, now + expiry_minutes * 60),
         )
     return get_escrow(eid)
 

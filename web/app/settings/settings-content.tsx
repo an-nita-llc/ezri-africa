@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   Check,
@@ -10,16 +9,18 @@ import {
   Contrast,
   Fingerprint,
   FlaskConical,
-  Globe2,
   KeyRound,
   Languages,
   Loader2,
   LogOut,
+  Percent,
   ShieldCheck,
   Sparkles,
   Type,
   UserRound,
 } from "lucide-react";
+import { InfoRow, PageHeader, SectionCard, Toggle } from "@/components/ui/section-card";
+import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf } from "../fx";
 import { clearSession, loadSession, type Session } from "../session";
 
 type Prefs = {
@@ -84,87 +85,6 @@ function readPrefs(): Prefs {
   }
 }
 
-function Toggle({
-  checked,
-  onChange,
-  label,
-  hint,
-  icon: Icon,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-  hint?: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition ${
-        checked
-          ? "border-brand-300 bg-brand-50/60"
-          : "border-border bg-surface hover:bg-muted"
-      }`}
-    >
-      <span className="flex min-w-0 items-start gap-2.5">
-        <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand-600" />
-        <span className="min-w-0">
-          <span className="block text-xs font-bold text-foreground">{label}</span>
-          {hint ? (
-            <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
-              {hint}
-            </span>
-          ) : null}
-        </span>
-      </span>
-      <span
-        aria-hidden="true"
-        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-          checked ? "bg-brand-600" : "bg-border"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-all ${
-            checked ? "left-[22px]" : "left-0.5"
-          }`}
-        />
-      </span>
-    </button>
-  );
-}
-
-function SectionCard({
-  title,
-  icon: Icon,
-  badge,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  badge?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="card flex flex-col gap-3">
-      <div className="flex items-center justify-between border-b border-border pb-2">
-        <h2 className="flex items-center gap-2 text-sm font-extrabold text-foreground">
-          <Icon aria-hidden="true" className="size-4 text-brand-600" />
-          {title}
-        </h2>
-        {badge ? (
-          <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-brand-700">
-            {badge}
-          </span>
-        ) : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 export function SettingsContent() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -221,15 +141,10 @@ export function SettingsContent() {
 
   return (
     <div className="flex flex-col gap-5 pb-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="flex items-center gap-2 text-xl font-extrabold text-foreground sm:text-2xl">
-          <Sparkles aria-hidden="true" className="size-5 text-brand-600" />
-          App settings
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Account, money-movement approvals, payout defaults and accessibility — all in one place.
-        </p>
-      </div>
+      <PageHeader
+        title="App settings"
+        subtitle="Account, money-movement approvals, fees, payout defaults and accessibility — all in one place."
+      />
 
       {/* Account */}
       <SectionCard title="Account" icon={UserRound} badge="Signed in">
@@ -324,11 +239,41 @@ export function SettingsContent() {
             </select>
           </div>
         </div>
-        <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs">
-          <span className="flex items-center gap-2 font-bold text-foreground">
-            <Globe2 aria-hidden="true" className="size-4 text-brand-600" /> Live FX rate
+        <InfoRow
+          label="Live FX rate"
+          value={`1 USD = ${USD_LRD} LRD`}
+          mono
+          highlight
+        />
+      </SectionCard>
+
+      {/* Fees — 2% of every transaction */}
+      <SectionCard title="Fees" icon={Percent} badge={`${FEE_PCT_LABEL}% per transaction`}>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Ezri charges a flat <strong className="text-foreground">{FEE_PCT_LABEL}%</strong> service
+          fee on every transaction. The fee is paid by the sender, added to the PayPal charge, and is
+          always shown for approval before any money moves — the receiver&apos;s payout is never reduced.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <InfoRow
+            label={`Example · $60 transfer`}
+            value={`Fee $${feeOf(60).toFixed(2)} · Total $${(60 + feeOf(60)).toFixed(2)}`}
+            mono
+          />
+          <InfoRow
+            label="Receiver gets in full"
+            value={`$60 → ${lrdOf(60).toLocaleString()} LRD`}
+            mono
+            highlight
+          />
+        </div>
+        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-[11px] leading-4 text-brand-800">
+          <Percent aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-brand-600" />
+          <span>
+            Applied automatically on every PayPal capture and shown in the chat approval card, the
+            Transfers Ledger and the receiver claim page. Refunds return the full charged amount
+            including the fee.
           </span>
-          <span className="font-mono font-extrabold text-foreground">1 USD = 192 LRD</span>
         </div>
       </SectionCard>
 

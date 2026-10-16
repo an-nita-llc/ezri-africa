@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from ai_guard import parse_intent, strict_proof_check
+from ai_guard import FEE_PCT, fee_of, parse_intent, strict_proof_check
 from ledger import (
     create_escrow, create_session, create_user, find_by_capture,
     get_escrow, get_session_email, list_escrows, update_escrow, verify_user,
@@ -18,10 +18,21 @@ from paypal_client import MOCK, capture_order, create_order, refund_capture
 
 EXPIRY_MIN = int(os.environ.get("DEMO_EXPIRY_MINUTES", "10"))
 
+# CORS allowlist (demo): explicit origins only — never "*" with credentials.
+# Override with CORS_ALLOWED_ORIGINS in production.
+_CORS_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "https://an-nita.com,https://www.an-nita.com",
+    ).split(",")
+    if o.strip() and o.strip() != "*"
+] or ["https://an-nita.com"]
+
 app = FastAPI(title="Ezri Africa — PayPal AI bridge (Liberia pilot)")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -29,7 +40,13 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "mock_paypal": MOCK, "expiry_minutes": EXPIRY_MIN}
+    return {
+        "ok": True,
+        "mock_paypal": MOCK,
+        "expiry_minutes": EXPIRY_MIN,
+        "fee_pct": FEE_PCT,  # Ezri platform fee: 2% of every transaction
+        "fx_lrd": 194.50,
+    }
 
 
 class SignupIn(BaseModel):
@@ -91,7 +108,9 @@ async def chat_parse(body: ParseIn) -> dict:
 
 @app.post("/api/escrow/create")
 async def escrow_create(body: EscrowCreateIn, request: Request) -> dict:
-    order = await create_order(body.amount_usd)
+    fee = fee_of(body.amount_usd)          # 2% Ezri service fee
+    total = round(body.amount_usd + fee, 2)  # what PayPal actually charges the sender
+    order = await create_order(total)
     row = create_escrow(body.amount_usd, body.tag, body.note, body.recipient, EXPIRY_MIN, _sender(request))
     row = update_escrow(row["id"], paypal_order_id=order["order_id"])
     return {
@@ -100,6 +119,10 @@ async def escrow_create(body: EscrowCreateIn, request: Request) -> dict:
         "approval_url": order["approval_url"],
         "status": row["status"],
         "expires_in_minutes": EXPIRY_MIN,
+        "amount_usd": row["amount_usd"],
+        "fee_usd": row["fee_usd"],
+        "fee_pct": FEE_PCT * 100,
+        "total_usd": round(row["amount_usd"] + row["fee_usd"], 2),
     }
 
 
@@ -167,9 +190,11 @@ async def escrow_refund(body: RefundIn) -> dict:
         raise HTTPException(404, "escrow not found")
     if row["status"] == "REFUNDED":
         return {"escrow_id": row["id"], "status": "REFUNDED"}
-    out = await refund_capture(row.get("paypal_capture_id", ""), row["amount_usd"])
+    # Refund what was captured: transfer amount + the 2% fee charged on top.
+    charged = round(row["amount_usd"] + float(row.get("fee_usd") or 0), 2)
+    out = await refund_capture(row.get("paypal_capture_id", ""), charged)
     row = update_escrow(row["id"], status="REFUNDED")
-    return {"escrow_id": row["id"], "status": "REFUNDED", "refund_id": out["refund_id"]}
+    return {"escrow_id": row["id"], "status": "REFUNDED", "refund_id": out["refund_id"], "refunded_usd": charged}
 
 
 @app.get("/api/escrow/{eid}")
@@ -185,7 +210,10 @@ def escrow_get(eid: str) -> dict:
 @app.post("/api/webhooks/paypal")
 async def paypal_webhook(request: Request) -> dict:
     """PayPal event receiver. Sandbox: configure webhook URL in developer dashboard.
-    Mock mode: hit directly with the JSON below (see postman collection)."""
+    Mock mode: hit directly with the JSON below (see postman collection).
+    SECURITY NOTE (demo only): no signature verification here — do NOT reuse
+    this handler in production. Production wallet webhooks fail closed without
+    a secret (see wallet/controllers/wallet_payment_api.py:1031)."""
     try:
         event = await request.json()
     except Exception:

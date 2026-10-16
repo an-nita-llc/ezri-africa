@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import PayPalButtons from "./PayPalButtons";
+import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf, totalOf } from "./fx";
 import { authHeaders, loadSession, type Session } from "./session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -32,7 +33,31 @@ const INITIAL_CHIPS = [
   "Send $120 for hospital bill",
   "Send $45 for grocery food",
   "Send $200 for rent",
+  "What are the fees?",
   "Configure Purpose Lock",
+];
+
+/** Chips offered after a non-transfer (conversational) reply. */
+const CHAT_CHIPS = [
+  "Send $60 to mom for school",
+  "What are the fees?",
+  "How does escrow work?",
+  "View Ledger",
+];
+
+const MONEY_STEPS = [
+  "Reading your message",
+  "Extracting amount, recipient & purpose",
+  "Fetching live FX rate (USD → LRD)",
+  `Computing ${FEE_PCT_LABEL}% fee & fraud score`,
+  "Applying purpose lock rules",
+];
+
+const CHAT_STEPS = [
+  "Reading your message",
+  "Classifying intent (transfer vs question)",
+  "Matching knowledge: fees · escrow · claiming",
+  "Composing reply",
 ];
 
 interface Message {
@@ -290,6 +315,21 @@ function ChatMessageItem({
                 </span>
               </div>
 
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-surface px-3 py-2 text-xs">
+                <span className="font-bold text-foreground">
+                  Ezri fee ({FEE_PCT_LABEL}%) · sender-paid
+                </span>
+                <span className="font-extrabold text-foreground">
+                  +$
+                  {(Number(msg.card.fee_usd) > 0
+                    ? Number(msg.card.fee_usd)
+                    : feeOf(Number(msg.card.amount_usd) || 0)
+                  ).toFixed(2)}{" "}
+                  · total $
+                  {totalOf(Number(msg.card.amount_usd) || 0).toFixed(2)}
+                </span>
+              </div>
+
               <button
                 type="button"
                 onClick={onRequestPay}
@@ -340,7 +380,7 @@ export default function PlugPage() {
   }, []);
 
   const initWelcome = useCallback((s: Session) => {
-    const welcomeText = `${greeting()}, ${s.name || "Demo Sender"}\n\nPurpose-Locked Remittance\nPayPal foreign collection → AI purpose lock → Strict proof check → Mobile Money disburse\n\nLive FX Rate: 1 USD = 192.00 LRD`;
+    const welcomeText = `${greeting()}, ${s.name || "Demo Sender"}\n\nPurpose-Locked Remittance\nPayPal foreign collection → AI purpose lock → Strict proof check → Mobile Money disburse\n\nLive FX Rate: 1 USD = ${USD_LRD} LRD\nService fee: ${FEE_PCT_LABEL}% per transfer — always shown for your approval before money moves`;
 
     setMessages([
       {
@@ -406,18 +446,22 @@ export default function PlugPage() {
     setMessages((m) => [...m, { id: `usr-${Date.now()}`, role: "user", text: cmdText, time: now() }]);
     setInput("");
     setSending(true);
+
+    // Pick the visible agent trail: money steps only for real transfer-shaped
+    // messages, otherwise a conversational trail (no fraud/purpose theater).
+    const looksLikeTransfer =
+      /\b(send|sends|transfer|transfers|pay|pays|remit|top-?up|wire|move)\b/i.test(cmdText) &&
+      /[$]|\b\d+(?:\.\d+)?\b/.test(cmdText);
+    const steps = looksLikeTransfer ? MONEY_STEPS : CHAT_STEPS;
     setAgentRun({
       title: "Analyzing your request",
-      steps: [
-        { label: "Reading message intent", status: "running" },
-        { label: "Extracting amount & recipient", status: "queued" },
-        { label: "Fetching live FX rate (USD → LRD)", status: "queued" },
-        { label: "Running fraud risk model", status: "queued" },
-        { label: "Applying purpose lock rules", status: "queued" },
-      ],
+      steps: steps.map((label, i) => ({
+        label,
+        status: (i === 0 ? "running" : "queued") as AgentStep["status"],
+      })),
     });
 
-    const agentDone = advanceSteps(5, 480);
+    const agentDone = advanceSteps(steps.length, looksLikeTransfer ? 480 : 460);
     try {
       const r = await fetch(`${API}/api/chat/parse`, {
         method: "POST",
@@ -427,12 +471,26 @@ export default function PlugPage() {
       const j = await r.json();
       await agentDone;
       setAgentRun(null);
-      setParsed(j);
-      say(
-        `I can lock $${j.amount_usd} USD for ${j.tag}. Review the purpose lock below — tap a tag to change it. Nothing moves until you approve and enter your PIN.`,
-        { ...j, kind: "setup" },
-        ["Hold & Pay", "Configure Purpose Lock", "View Ledger"]
-      );
+      const intent = j.intent || "transfer";
+      if (intent !== "transfer") {
+        // Conversational answer — no money card, no escrow, nothing locked.
+        setParsed(null);
+        say(
+          j.reply ||
+            "I can set up purpose-locked transfers end to end. Tell me a transfer (e.g. “Send $120 for hospital bill”), or ask about fees, escrow or claiming.",
+          undefined,
+          CHAT_CHIPS,
+        );
+      } else {
+        setParsed(j);
+        const fee = Number(j.fee_usd) > 0 ? Number(j.fee_usd) : feeOf(j.amount_usd);
+        const total = Math.round((j.amount_usd + fee) * 100) / 100;
+        say(
+          `I can lock $${j.amount_usd} USD for ${j.tag} — receiver gets ${Number(j.fx_lrd).toLocaleString()} LRD, Ezri fee ${FEE_PCT_LABEL}% ($${fee.toFixed(2)}) → $${total.toFixed(2)} charged to you. Review the purpose lock below — tap a tag to change it. Nothing moves until you approve and enter your PIN.`,
+          { ...j, kind: "setup" },
+          ["Hold & Pay", "Configure Purpose Lock", "View Ledger"],
+        );
+      }
     } catch {
       await agentDone;
       setAgentRun(null);
@@ -460,7 +518,16 @@ export default function PlugPage() {
       router.push("/login");
       return;
     }
-    const p = parsed || { amount_usd: 60, tag: "SCHOOL", note: "School tuition", recipient: "mom" };
+    if (!parsed) {
+      // No transfer has been discussed yet — never invent one.
+      say(
+        "We haven't set up a transfer yet. Tell me what to send first — for example “Send $60 to mom for school” — and I'll show the full breakdown before anything moves.",
+        undefined,
+        ["Send $60 to mom for school", "What are the fees?"],
+      );
+      return;
+    }
+    const p = parsed;
     setApproval({ amount: p.amount_usd, tag: p.tag || "SCHOOL" });
     setPinStage(false);
     setPin("");
@@ -659,6 +726,27 @@ export default function PlugPage() {
                   <span className={statusBadge(escrow.status)}>{escrow.status}</span>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block font-semibold">Transfer amount</span>
+                    <span className="font-extrabold text-foreground">
+                      ${(Number(escrow.amount_usd) || 0).toFixed(2)} USD
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block font-semibold">
+                      Ezri fee ({FEE_PCT_LABEL}%) · total charged
+                    </span>
+                    <span className="font-extrabold text-foreground">
+                      ${feeOf(Number(escrow.amount_usd) || 0).toFixed(2)} · $
+                      {(Number(escrow.total_usd) > 0
+                        ? Number(escrow.total_usd)
+                        : totalOf(Number(escrow.amount_usd) || 0)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <span className="text-xs font-bold text-foreground">
                     Receiver Claim Link (Zero Login Needed)
@@ -723,13 +811,35 @@ export default function PlugPage() {
                   <div>
                     <span className="text-muted-foreground block font-semibold">Payout Total</span>
                     <span className="font-extrabold text-foreground">
-                      {Number(parsed?.fx_lrd ?? (parsed?.amount_usd ?? 60) * 192).toLocaleString()} LRD
+                      {Number(
+                        parsed?.fx_lrd ?? lrdOf(Number(parsed?.amount_usd ?? 60)),
+                      ).toLocaleString()}{" "}
+                      LRD
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block font-semibold">Fraud Risk Assessment</span>
                     <span className={`font-extrabold ${(parsed?.fraud_score ?? 10) >= 50 ? "text-danger" : "text-annita-green-dark"}`}>
                       {parsed?.fraud_score ?? 10}/100{(parsed?.fraud_score ?? 10) < 50 ? " (Safe)" : ""}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block font-semibold">
+                      Ezri fee ({FEE_PCT_LABEL}%)
+                    </span>
+                    <span className="font-extrabold text-foreground">
+                      $
+                      {(Number(parsed?.fee_usd) > 0
+                        ? Number(parsed?.fee_usd)
+                        : feeOf(Number(parsed?.amount_usd ?? 60))
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block font-semibold">Sender charged</span>
+                    <span className="font-extrabold text-foreground">
+                      $
+                      {totalOf(Number(parsed?.amount_usd ?? 60)).toFixed(2)} USD
                     </span>
                   </div>
                 </div>
