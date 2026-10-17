@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "./shell";
+import { InlineScript } from "./inline-script";
+import { PrefsBoot } from "./prefs-boot";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -81,8 +83,15 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Runs synchronously during HTML parsing, before any body content
+            paints — no flash of the wrong theme. InlineScript keeps React's
+            dev "script inside component" warning away (prefs-boot re-applies
+            attributes after hydration, since the script can't run again). */}
+        <InlineScript html={THEME_BOOTSTRAP} />
+      </head>
       <body className="min-h-full flex flex-col">
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
+        <PrefsBoot />
         <AppShell>{children}</AppShell>
       </body>
     </html>
