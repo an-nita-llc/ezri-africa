@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, Lock } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard, Fingerprint, Globe, KeyRound, Loader2, Lock, ShieldCheck, Wallet, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authButtonClass, authInputClass } from "@/components/auth/classes";
 import { PasswordField } from "@/components/auth/password-field";
 import { loadSession, saveSession } from "./session";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 function ErrorAlert({ message }: { message: string }) {
   return (
@@ -63,13 +63,11 @@ export function LoginForm() {
     }
     setPending(true);
     try {
-      // 1) Accounts created via Sign up log in with their real password.
       let session: { token: string; email: string; name: string } | null = null;
       const j = await post("/api/auth/login", { email: typedEmail, password });
       if (j.token && j.user) {
         session = { token: j.token, email: j.user.email, name: j.user.name };
       }
-      // 2) Demo mode: ANY email + password opens a session — no button needed.
       if (!session) {
         const d = await post("/api/auth/demo", { email: typedEmail, password });
         if (d.token && d.user) {
@@ -164,7 +162,6 @@ export function OtpSignInForm() {
     return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
   }
 
-  /** Request the code, then hand off to the dedicated /verify-otp page. */
   async function requestCode(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -224,8 +221,6 @@ export function PasskeySignInButton() {
     setError(null);
     setPending(true);
     try {
-      // Real platform passkey check (Windows Hello / Touch ID / Android)
-      // when the device supports it, then open the sender session.
       if (typeof window !== "undefined" && "PublicKeyCredential" in window) {
         try {
           const available =
@@ -240,9 +235,7 @@ export function PasskeySignInButton() {
               },
             });
           }
-        } catch {
-          // Cancelled or no registered credential — continue to session.
-        }
+        } catch {}
       }
       const j = await post("/api/auth/demo", {});
       if (!j.token || !j.user) {
@@ -285,10 +278,6 @@ export function PasskeySignInButton() {
           </>
         )}
       </button>
-      <p className="text-center text-xs leading-5 text-muted-foreground">
-        Uses your device passkey (fingerprint, face, or Windows Hello) when
-        available. Demo mode opens your sender session instantly.
-      </p>
     </div>
   );
 }
@@ -344,39 +333,74 @@ export function SignInTabs() {
   );
 }
 
-const COUNTRIES = [
-  "Liberia",
-  "Nigeria",
-  "Ghana",
-  "Sierra Leone",
-  "Guinea",
-  "Côte d'Ivoire",
-  "Senegal",
-  "Cameroon",
-  "Kenya",
-  "Uganda",
-  "Tanzania",
-  "Rwanda",
-  "Ethiopia",
-  "South Africa",
-  "Zambia",
-  "Zimbabwe",
-  "Botswana",
-  "Malawi",
-  "Mozambique",
-  "Other",
+const DIASPORA_COUNTRIES = [
+  "United States (🇺🇸)",
+  "United Kingdom (🇬🇧)",
+  "Canada (🇨🇦)",
+  "European Union (🇪🇺)",
+  "Australia (🇦🇺)",
+  "Other Diaspora Country",
+];
+
+const AFRICAN_COUNTRIES = [
+  "Liberia (🇱🇷)",
+  "Ghana (🇬🇭)",
+  "Nigeria (🇳🇬)",
+  "Senegal (🇸🇳)",
+  "Kenya (🇰🇪)",
+  "South Africa (🇿🇦)",
+  "Côte d'Ivoire (🇨🇮)",
+  "Tanzania (🇹🇿)",
+  "Uganda (🇺🇬)",
+  "Rwanda (🇷🇼)",
+  "Ethiopia (🇪🇹)",
+  "Egypt (🇪🇬)",
+  "Zimbabwe (🇿🇼)",
+  "Sierra Leone (🇸🇱)",
+  "Gambia (🇬🇲)",
+];
+
+const DIASPORA_PROVIDERS = [
+  "PayPal Sandbox Escrow (Default)",
+  "Debit or Credit Card",
+  "Direct Bank Transfer",
+];
+
+const AFRICAN_PROVIDERS = [
+  "MTN Mobile Money",
+  "Orange Money",
+  "M-Pesa (Safaricom)",
+  "Wave Mobile Money",
+  "OPay Wallet",
+  "PalmPay Wallet",
+  "Ecobank Pan-African Wire",
+  "UBA (United Bank for Africa)",
+  "GTBank Africa",
 ];
 
 export function SignupForm() {
   const router = useRouter();
+
+  // Step 1: Location Base Choice
+  const [regionType, setRegionType] = useState<"DIASPORA" | "AFRICA">("DIASPORA");
+
+  // Step 2: Country & Provider
+  const [diasporaCountry, setDiasporaCountry] = useState("United States (🇺🇸)");
+  const [diasporaProvider, setDiasporaProvider] = useState("PayPal Sandbox Escrow (Default)");
+
+  const [africanCountry, setAfricanCountry] = useState("Liberia (🇱🇷)");
+  const [africanProvider, setAfricanProvider] = useState("MTN Mobile Money");
+
+  // Step 3: User Details
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [country, setCountry] = useState("Liberia");
   const [dob, setDob] = useState("");
   const [location, setLocation] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [pin, setPin] = useState("1234");
+
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   useRedirectIfAuthed();
@@ -384,6 +408,7 @@ export function SignupForm() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
     if (!phone.trim()) {
       setError("Please enter your mobile phone number.");
       return;
@@ -408,17 +433,24 @@ export function SignupForm() {
       setError("The passwords don't match. Try again.");
       return;
     }
+
     setPending(true);
+    const selectedCountry = regionType === "DIASPORA" ? diasporaCountry : africanCountry;
+    const selectedProvider = regionType === "DIASPORA" ? diasporaProvider : africanProvider;
+
     try {
       const j = await post("/api/auth/signup", {
         name: name || "Sender",
         email,
         password,
         phone: phone.trim(),
-        country,
+        country: selectedCountry,
+        provider: selectedProvider,
+        region_type: regionType,
         dob,
         location: location.trim(),
       });
+
       if (!j.token || !j.user) {
         setError(
           "We couldn't create that account. Use a different email and password, then try again.",
@@ -426,6 +458,7 @@ export function SignupForm() {
         setPending(false);
         return;
       }
+
       await saveSession({ token: j.token, email: j.user.email, name: j.user.name });
       router.push("/");
       router.refresh();
@@ -439,6 +472,122 @@ export function SignupForm() {
     <div className="flex flex-col gap-5">
       {error ? <ErrorAlert message={error} /> : null}
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+        {/* Region Base Choice */}
+        <div className="flex flex-col gap-2 rounded-2xl bg-muted/50 p-3 border border-border">
+          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Where are you currently based?
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setRegionType("DIASPORA")}
+              className={`py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
+                regionType === "DIASPORA"
+                  ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs ring-2 ring-brand-500/20"
+                  : "border-border bg-surface text-foreground hover:bg-muted"
+              }`}
+            >
+              ✈️ Diaspora Abroad (Sender)
+            </button>
+            <button
+              type="button"
+              onClick={() => setRegionType("AFRICA")}
+              className={`py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
+                regionType === "AFRICA"
+                  ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs ring-2 ring-brand-500/20"
+                  : "border-border bg-surface text-foreground hover:bg-muted"
+              }`}
+            >
+              🌍 Based in Africa (Receiver)
+            </button>
+          </div>
+        </div>
+
+        {/* Country & Provider Selection based on Region */}
+        {regionType === "DIASPORA" ? (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="diaspora-country" className="text-sm font-medium">
+                Diaspora Residence Country
+              </label>
+              <select
+                id="diaspora-country"
+                value={diasporaCountry}
+                onChange={(e) => setDiasporaCountry(e.target.value)}
+                className={authInputClass}
+              >
+                {DIASPORA_COUNTRIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="diaspora-provider" className="text-sm font-medium">
+                Primary Payment Provider
+              </label>
+              <select
+                id="diaspora-provider"
+                value={diasporaProvider}
+                onChange={(e) => setDiasporaProvider(e.target.value)}
+                className={authInputClass}
+              >
+                {DIASPORA_PROVIDERS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                PayPal Sandbox Escrow collects your payment abroad securely.
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="african-country" className="text-sm font-medium">
+                African Country
+              </label>
+              <select
+                id="african-country"
+                value={africanCountry}
+                onChange={(e) => setAfricanCountry(e.target.value)}
+                className={authInputClass}
+              >
+                {AFRICAN_COUNTRIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="african-provider" className="text-sm font-medium">
+                Primary Local Disburse Provider
+              </label>
+              <select
+                id="african-provider"
+                value={africanProvider}
+                onChange={(e) => setAfricanProvider(e.target.value)}
+                className={authInputClass}
+              >
+                {AFRICAN_PROVIDERS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Your preferred local wallet or bank account for instant disburse.
+              </p>
+            </div>
+          </>
+        )}
+
         <div className="flex flex-col gap-1.5">
           <label htmlFor="name" className="text-sm font-medium">
             Full name
@@ -471,64 +620,41 @@ export function SignupForm() {
             placeholder="+231 88 123 4567"
             className={`${authInputClass} font-mono`}
           />
-          <p className="text-xs text-muted-foreground">
-            Used for transfer alerts and your mobile money payouts.
-          </p>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="country" className="text-sm font-medium">
-            Country
-          </label>
-          <select
-            id="country"
-            name="country"
-            value={country}
-            onChange={(event) => setCountry(event.target.value)}
-            className={authInputClass}
-          >
-            {COUNTRIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="dob" className="text-sm font-medium">
+              Date of birth
+            </label>
+            <input
+              id="dob"
+              name="dob"
+              type="date"
+              autoComplete="bday"
+              required
+              value={dob}
+              onChange={(event) => setDob(event.target.value)}
+              className={authInputClass}
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="dob" className="text-sm font-medium">
-            Date of birth
-          </label>
-          <input
-            id="dob"
-            name="dob"
-            type="date"
-            autoComplete="bday"
-            required
-            value={dob}
-            onChange={(event) => setDob(event.target.value)}
-            className={authInputClass}
-          />
-          <p className="text-xs text-muted-foreground">
-            Required for identity checks before mobile money disbursement.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="location" className="text-sm font-medium">
-            City / location
-          </label>
-          <input
-            id="location"
-            name="location"
-            type="text"
-            autoComplete="address-level2"
-            required
-            value={location}
-            onChange={(event) => setLocation(event.target.value)}
-            placeholder="e.g. Monrovia"
-            className={authInputClass}
-          />
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="location" className="text-sm font-medium">
+              City / location
+            </label>
+            <input
+              id="location"
+              name="location"
+              type="text"
+              autoComplete="address-level2"
+              required
+              value={location}
+              onChange={(event) => setLocation(event.target.value)}
+              placeholder="e.g. Monrovia"
+              className={authInputClass}
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -557,7 +683,6 @@ export function SignupForm() {
             onChange={setPassword}
             autoComplete="new-password"
             minLength={4}
-            hint="At least 4 characters for demo mode."
           />
           <PasswordField
             id="signup-confirm-password"
@@ -567,7 +692,6 @@ export function SignupForm() {
             onChange={setConfirmPassword}
             autoComplete="new-password"
             minLength={4}
-            hint="Re-enter your password to confirm."
           />
         </div>
 

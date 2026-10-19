@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "./shell";
 import { InlineScript } from "./inline-script";
 import { PrefsBoot } from "./prefs-boot";
+import { JsonLd } from "@/components/seo/json-ld";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,13 +17,96 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://ezri.africa"),
   title: {
-    default: "Ezri Africa — Proof Before Payout",
+    default: "Ezri Africa — Purpose-Locked P2P Remittance & AI Escrow Platform",
     template: "%s · Ezri Africa",
   },
   description:
-    "Chat, lock, prove. Turn PayPal into a protected mobile money bridge with AI verification, offline queue and escrow on every transaction.",
-  manifest: "/manifest.webmanifest",
+    "Send money from diaspora to Africa for a purpose — food, school, healthcare, rent. PayPal foreign collection, OpenRouter AI purpose lock, and instant mobile money disburse across 15 African nations.",
+  keywords: [
+    "remittance Africa",
+    "send money to Liberia",
+    "send money to Ghana",
+    "send money to Nigeria",
+    "purpose locked escrow",
+    "mobile money disburse",
+    "PayPal Africa bridge",
+    "virtual card Africa",
+    "MTN Mobile Money",
+    "Orange Money",
+    "M-Pesa",
+    "Ecobank remittance",
+    "OPay",
+    "Wave Mobile Money",
+    "Ezri Africa",
+    "Annita LLC",
+  ],
+  authors: [{ name: "Annita LLC", url: "https://ezri.africa" }],
+  creator: "Annita LLC",
+  publisher: "Ezri Africa",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  alternates: {
+    canonical: "https://ezri.africa",
+    languages: {
+      "en-US": "https://ezri.africa",
+      "en-LR": "https://ezri.africa",
+      "en-GH": "https://ezri.africa",
+      "en-NG": "https://ezri.africa",
+      "fr-SN": "https://ezri.africa",
+      "fr-CI": "https://ezri.africa",
+      "sw-KE": "https://ezri.africa",
+    },
+  },
+  icons: {
+    icon: [
+      { url: "/brand/annita-mark.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/brand/annita-mark.png", sizes: "180x180", type: "image/png" }],
+    shortcut: "/brand/annita-mark.png",
+  },
+  manifest: "/site.webmanifest",
+  openGraph: {
+    title: "Ezri Africa — Purpose-Locked Remittance & AI Escrow Platform",
+    description:
+      "Cross-border payments built for Africa. PayPal collects abroad in US/EU; OpenRouter AI locks purpose; local mobile money pays out across 15 African nations.",
+    url: "https://ezri.africa",
+    siteName: "Ezri Africa",
+    images: [
+      {
+        url: "https://ezri.africa/brand/annita-logo.png",
+        width: 1200,
+        height: 630,
+        alt: "Ezri Africa Purpose Locked Remittance",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Ezri Africa — Purpose-Locked Remittance Platform",
+    description:
+      "Send money to Africa for a purpose. Protected by PayPal Escrow & OpenRouter AI.",
+    images: ["https://ezri.africa/brand/annita-logo.png"],
+  },
+  other: {
+    "geo.region": "LR, GH, NG, SN, KE, ZA, CI, TZ, UG, RW, ET, EG, ZW, SL, GM",
+    "geo.placename": "Monrovia, Accra, Lagos, Dakar, Nairobi, Johannesburg",
+    "geo.position": "6.3156; -10.8074",
+    "icbm": "6.3156, -10.8074",
+  },
 };
 
 export const viewport: Viewport = {
@@ -35,11 +119,6 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-/**
- * Applies saved appearance preferences (theme, text size, font, contrast)
- * before the first paint so there is no flash of the wrong theme. Mirrors
- * web/app/prefs.ts — keep the two in sync.
- */
 const THEME_BOOTSTRAP = `(function () {
   try {
     var root = document.documentElement;
@@ -84,11 +163,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        {/* Runs synchronously during HTML parsing, before any body content
-            paints — no flash of the wrong theme. InlineScript keeps React's
-            dev "script inside component" warning away (prefs-boot re-applies
-            attributes after hydration, since the script can't run again). */}
         <InlineScript html={THEME_BOOTSTRAP} />
+        <JsonLd />
       </head>
       <body className="min-h-full flex flex-col">
         <PrefsBoot />
