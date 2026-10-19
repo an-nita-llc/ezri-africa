@@ -19,6 +19,9 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=https://ezri-api.onrender.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+# Only the image build uses standalone output; the Git-backed Render
+# service keeps `next start` (which requires non-standalone output).
+ENV NEXT_OUTPUT=standalone
 RUN pnpm run build
 
 # ---------------------------------------------------------------------------

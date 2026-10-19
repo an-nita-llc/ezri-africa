@@ -1,10 +1,13 @@
 import type { NextConfig } from "next";
 
+// Standalone output is only for the Docker image (CI sets NEXT_OUTPUT).
+// The Git-backed Render service runs `next start`, which does not support
+// standalone output, so it keeps the default build shape.
+const isStandalone = process.env.NEXT_OUTPUT === "standalone";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  // Emit a self-contained server bundle: CI ships only the traced runtime
-  // files in the image, not node_modules + the source tree.
-  output: "standalone",
+  ...(isStandalone ? { output: "standalone" as const } : {}),
   // Production builds do not need source maps for prerender errors or the
   // browser bundle; keeping both off lowers peak build memory.
   enablePrerenderSourceMaps: false,

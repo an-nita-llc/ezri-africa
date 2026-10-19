@@ -47,6 +47,8 @@ Apply `render.yaml` as a Blueprint, or create them manually:
 - Instance type: Free
 - Health check path: `/`
 - No build command, no start command — the image listens on `$PORT`
+- Name it `ezri-africa` if you want to keep the current public URL; otherwise
+  use `ezri-web` and update `CORS_ALLOWED_ORIGINS` accordingly
 
 **`ezri-api`** — New → Web Service → Python
 
@@ -55,7 +57,9 @@ Apply `render.yaml` as a Blueprint, or create them manually:
 - Health check path: `/api/health`
 - Environment: `DATABASE_URL`, PayPal, Upstash, and Cloudflare R2 values from
   `.env.example` (set them in the dashboard only — never in git)
-- `CORS_ALLOWED_ORIGINS`: your web URL, e.g. `https://ezri-web.onrender.com`
+- `CORS_ALLOWED_ORIGINS`: your web URL(s), comma-separated. The current
+  Git-backed deployment is `https://ezri-africa.onrender.com`; if you create
+  the image service as `ezri-web`, add `https://ezri-web.onrender.com` too.
 
 ### 4. Point the web build at the API
 
@@ -83,18 +87,18 @@ triggers Render after every successful image push. Without it, click
 - Safe local commands: `pnpm dev`, `pnpm typecheck`, `pnpm test`.
 - Do not commit `.next/`, `node_modules/`, or build artifacts.
 
-## Fallback: Git-backed Node service
+## Fallback: Git-backed Node service (currently live)
 
-If image deploys are not available on your Render plan, the same repository
-still deploys as a normal Node service now that the 34 MB Bryntum trial bundle
-is gone:
+The current deployment at `https://ezri-africa.onrender.com` uses this path.
+It works as a normal Node service now that the 34 MB Bryntum trial bundle is
+gone:
 
 - Runtime: **Node**, Root Directory: `web`
 - Build: `pnpm install --frozen-lockfile && pnpm run build`
 - Start: `./node_modules/.bin/next start -p $PORT`
 
-This build runs on Render's 8 GB pipeline and may still be tight; the image
-path above is the guaranteed one.
+This build runs on Render's 8 GB pipeline; the image path above is the
+guaranteed one and does not depend on Render's build memory at all.
 
 ## Rollback
 
