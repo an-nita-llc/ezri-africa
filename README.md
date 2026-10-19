@@ -96,7 +96,7 @@ sequenceDiagram
 ## Complete API Reference & Endpoints
 
 ### 1. Gateway & Auth Endpoints (`:8000`)
-- `GET /api/health` — Returns multi-service health status (`ai_service_online`, `db_service_online`, `fee_pct`, `fx_lrd`).
+- `GET /api/health` — Gateway status: `mock_paypal`, `db` (`postgres` or `sqlite`), `ai_guard` (`openrouter` or `heuristic`), `expiry_minutes`, `fee_pct`, `fx_lrd`, `notify_webhook`.
 - `POST /api/auth/signup` — Registers user with name, email, profile fields (phone, country, provider, region, DOB, location) and PBKDF2 hashed password.
 - `POST /api/auth/login` — Password sign-in.
 - `POST /api/auth/demo` — Issues a judge demo token without rejecting credentials.
@@ -220,21 +220,111 @@ model VirtualCard {
 
 ---
 
-## Running All Microservices Locally
+## Environment Variables (All Keys)
 
-```bash
-# 1. Start AI Microservice (Port 8001)
-python backend/ai-service/main.py
+Nothing is mandatory: with zero keys the app still runs the complete judge demo
+(mock PayPal, SQLite, heuristic AI guard, sign-in codes shown on screen). The
+keys below make each integration real.
 
-# 2. Start DB Microservice (Port 8002)
-python backend/db-service/main.py
+Local templates (both gitignored; the templates are committed):
 
-# 3. Start API Direction Gateway (Port 8000)
-python backend/gateway/main.py
-
-# 4. Start Next.js PWA Web App (Port 3000)
-cd web && pnpm run dev
+```powershell
+Copy-Item .env.example .env                 # API gateway keys
+Copy-Item web/.env.example web/.env.local   # Next.js web keys
 ```
+
+The API loads the repo-root `.env` automatically (`api/env_loader.py`,
+python-dotenv) **without overriding** real process env, so Render dashboard
+values always win. `GET /api/health` reports what was actually picked up:
+
+```json
+{"ok":true,"mock_paypal":false,"db":"postgres","ai_guard":"openrouter",
+ "expiry_minutes":10,"fee_pct":0.02,"fx_lrd":194.5,"notify_webhook":true}
+```
+
+### API gateway (`ezri-api` on Render)
+
+| Variable | Needed? | What it does | Where to get it | Without it |
+|---|---|---|---|---|
+| `DATABASE_URL` | Recommended | Postgres persistence for users, sessions, escrows, cards, prefs, OTPs, reset tokens, and events | [Neon](https://neon.tech): create a free project, then Dashboard -> Connect -> copy the pooled connection string and add `?sslmode=require` if it is not already there. Prisma Postgres works too. | SQLite at `api/ezri.db`; data resets on every Render redeploy |
+| `PAYPAL_CLIENT_ID` | Optional | PayPal Orders v2 sandbox OAuth | [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox): Apps & Credentials -> Sandbox -> Create App -> copy Client ID | Mock PayPal (`MOCK-` order/capture ids, mock approval page) |
+| `PAYPAL_CLIENT_SECRET` | Optional | Secret for the same PayPal sandbox app | Same screen as the Client ID | Mock PayPal |
+| `PAYPAL_BASE_URL` | No | PayPal API host | Default `https://api-m.sandbox.paypal.com`; use `https://api-m.paypal.com` only for live money | Sandbox host |
+| `OPENROUTER_API_KEY` | Optional | LLM intent parsing and vision receipt checks | [OpenRouter Keys](https://openrouter.ai/keys): Create Key, copy `sk-or-v1-...`, add a few dollars of credit | Deterministic heuristic guard (still parses intent and checks photos) |
+| `OPENROUTER_SITE_URL` | No | Attribution header sent to OpenRouter | Default `https://ezri-africa.com` | Default |
+| `OPENROUTER_SITE_NAME` | No | Attribution label sent to OpenRouter | Default `Ezri Africa hackathon demo` | Default |
+| `NOTIFY_WEBHOOK_URL` | Optional | Zapier Catch Hook: lifecycle events, OTP codes, and password-reset links | [Zapier](https://zapier.com): Create Zap -> Trigger `Webhooks by Zapier` -> `Catch Hook` -> copy the hook URL | OTP/reset codes are returned on screen as `demo_code` / `demo_token`; events stay in the API log |
+| `DEMO_EXPIRY_MINUTES` | No | Escrow expiry window | Default `10` (demo stand-in for the 48h production policy) | 10 |
+| `EZRI_FEE_PCT` | No | Platform fee added on top of the transfer | Default `0.02` (2%) | 0.02 |
+| `EZRI_MONEY_PIN` | No | PIN required by the MCP money-moving tools | Default `1234` (demo only) | 1234 |
+| `WEB_BASE_URL` | No | Base URL used inside reset links delivered to the webhook | Default `https://ezri-africa.com` | Default |
+| `CORS_ALLOWED_ORIGINS` | No | Comma-separated browser origins allowed to call the API | Production defaults are baked into `server.py`; set locally to include the dev-server origin | Production origins |
+| `EZRI_DB` | No | Override the SQLite file path | Local development only | `api/ezri.db` |
+
+Webhook payloads are flat JSON: `event` plus `email` and `code` for
+`auth.otp_requested`; `event` plus `email` and `reset_url` for
+`auth.reset_requested`; escrow fields (`escrow_id`, `status`, `tag`,
+`amount_usd`, `verdict`, ...) for transfer and proof events.
+
+Reserved but not read by current code: `REDIS_URL`, `UPSTASH_REDIS_REST_URL`,
+`UPSTASH_REDIS_REST_TOKEN`, `CLOUDFLARE_R2_ACCOUNT_ID`,
+`CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`,
+`CLOUDFLARE_R2_BUCKET_NAME`.
+
+### Web (`ezri-web` / Next.js)
+
+`NEXT_PUBLIC_*` values are inlined at build/dev start, so set them before the
+build and restart `pnpm dev` after any change.
+
+| Variable | Needed? | What it does | Where to get it | Without it |
+|---|---|---|---|---|
+| `NEXT_PUBLIC_API_URL` | Recommended | API base the browser calls | `https://api.ezri-africa.com` in production; the local gateway origin (port 8000) in `web/.env.local` | Code falls back to `https://api.ezri-africa.com` |
+| `NEXT_PUBLIC_PAYPAL_CLIENT_ID` | Optional | Public client ID for browser-side PayPal buttons | The same sandbox app's Client ID (public by design) | App uses the mock checkout path |
+
+### Where to put the production values
+
+- **Render `ezri-api`** -> Environment: `DATABASE_URL`, `PAYPAL_CLIENT_ID`,
+  `PAYPAL_CLIENT_SECRET`, `OPENROUTER_API_KEY`, `NOTIFY_WEBHOOK_URL`. Save and
+  Render redeploys automatically.
+- **Render `ezri-web`** -> Environment: `NEXT_PUBLIC_PAYPAL_CLIENT_ID` (and
+  `NEXT_PUBLIC_API_URL` if the domain ever changes). Use **Clear build cache &
+  deploy** so the value is inlined into the bundle.
+- **GitHub repo variables** (only for the GHCR image workflow): add
+  `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_PAYPAL_CLIENT_ID` under
+  Settings -> Secrets and variables -> Actions -> Variables.
+- Never commit real values. `.env`, `.env.*`, and `web/.env.local` are ignored
+  by git; only the `*.env.example` templates are tracked.
+
+### Minimum path to a fully live demo
+
+1. Neon `DATABASE_URL` -> persistence across redeploys.
+2. PayPal sandbox Client ID + Secret -> real sandbox orders (no real money).
+3. OpenRouter key -> real LLM parsing and vision verdicts.
+4. Zapier Catch Hook -> real OTP and reset email delivery.
+5. `NEXT_PUBLIC_PAYPAL_CLIENT_ID` -> browser PayPal buttons.
+
+---
+
+## Running Locally (Deployed Architecture)
+
+The live demo is two processes: the FastAPI gateway and the Next.js web app.
+The `backend/` microservice split (AI on 8001, DB on 8002, proxy on 8000) is
+kept as reference architecture and is not required for the demo; see
+[`backend/README.md`](./backend/README.md).
+
+```powershell
+# Terminal 1 -- API gateway on port 8000
+cd api
+python -m uvicorn server:app --reload --port 8000
+
+# Terminal 2 -- web app on port 3000
+cd web
+pnpm dev
+```
+
+Copy the env templates first (see [Environment Variables](#environment-variables-all-keys)).
+Health check: `https://api.ezri-africa.com/api/health` in production, or the
+`/api/health` path on port 8000 locally.
 
 Open the live app at <https://ezri-africa.com/login> and click **"Continue with One-Tap Demo"** (API base: <https://api.ezri-africa.com>).
 
