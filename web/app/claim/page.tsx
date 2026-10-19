@@ -35,7 +35,6 @@ type Provider = {
 type CountryConfig = {
   code: string;
   name: string;
-  flag: string;
   phonePrefix: string;
   currencies: Currency[];
   wallets: Provider[];
@@ -46,7 +45,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "LR",
     name: "Liberia",
-    flag: "🇱🇷",
     phonePrefix: "+231",
     currencies: [
       { code: "LRD", name: "Liberian Dollar", rate: 192.0, symbol: "L$" },
@@ -65,7 +63,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "GH",
     name: "Ghana",
-    flag: "🇬🇭",
     phonePrefix: "+233",
     currencies: [{ code: "GHS", name: "Ghanaian Cedi", rate: 15.2, symbol: "GH₵" }],
     wallets: [
@@ -82,7 +79,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "NG",
     name: "Nigeria",
-    flag: "🇳🇬",
     phonePrefix: "+234",
     currencies: [{ code: "NGN", name: "Nigerian Naira", rate: 1620.0, symbol: "₦" }],
     wallets: [
@@ -100,7 +96,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "SN",
     name: "Senegal & WAEMU",
-    flag: "🇸🇳",
     phonePrefix: "+221",
     currencies: [{ code: "XOF", name: "CFA Franc", rate: 610.0, symbol: "CFA" }],
     wallets: [
@@ -113,7 +108,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "KE",
     name: "Kenya",
-    flag: "🇰🇪",
     phonePrefix: "+254",
     currencies: [{ code: "KES", name: "Kenyan Shilling", rate: 129.0, symbol: "KSh" }],
     wallets: [
@@ -128,7 +122,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "ZA",
     name: "South Africa",
-    flag: "🇿🇦",
     phonePrefix: "+27",
     currencies: [{ code: "ZAR", name: "South African Rand", rate: 18.2, symbol: "R" }],
     wallets: [{ id: "VODAPAY_ZA", name: "VodaPay Wallet", desc: "Vodacom Pay" }],
@@ -141,7 +134,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "CI",
     name: "Côte d'Ivoire",
-    flag: "🇨🇮",
     phonePrefix: "+225",
     currencies: [{ code: "XOF", name: "CFA Franc CI", rate: 610.0, symbol: "CFA" }],
     wallets: [
@@ -154,7 +146,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "TZ",
     name: "Tanzania",
-    flag: "🇹🇿",
     phonePrefix: "+255",
     currencies: [{ code: "TZS", name: "Tanzanian Shilling", rate: 2680.0, symbol: "TSh" }],
     wallets: [
@@ -166,7 +157,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "UG",
     name: "Uganda",
-    flag: "🇺🇬",
     phonePrefix: "+256",
     currencies: [{ code: "UGX", name: "Ugandan Shilling", rate: 3670.0, symbol: "USh" }],
     wallets: [
@@ -178,7 +168,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "RW",
     name: "Rwanda",
-    flag: "🇷🇼",
     phonePrefix: "+250",
     currencies: [{ code: "RWF", name: "Rwandan Franc", rate: 1380.0, symbol: "FRw" }],
     wallets: [
@@ -190,7 +179,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "ET",
     name: "Ethiopia",
-    flag: "🇪🇹",
     phonePrefix: "+251",
     currencies: [{ code: "ETB", name: "Ethiopian Birr", rate: 124.0, symbol: "Br" }],
     wallets: [
@@ -202,7 +190,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "EG",
     name: "Egypt",
-    flag: "🇪🇬",
     phonePrefix: "+20",
     currencies: [{ code: "EGP", name: "Egyptian Pound", rate: 48.5, symbol: "E£" }],
     wallets: [
@@ -214,7 +201,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "ZW",
     name: "Zimbabwe",
-    flag: "🇿🇼",
     phonePrefix: "+263",
     currencies: [
       { code: "USD", name: "US Dollar", rate: 1.0, symbol: "$" },
@@ -229,7 +215,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "SL",
     name: "Sierra Leone",
-    flag: "🇸🇱",
     phonePrefix: "+232",
     currencies: [{ code: "SLE", name: "Sierra Leonean Leone", rate: 22.5, symbol: "Le" }],
     wallets: [
@@ -241,7 +226,6 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
     code: "GM",
     name: "Gambia",
-    flag: "🇬🇲",
     phonePrefix: "+220",
     currencies: [{ code: "GMD", name: "Gambian Dalasi", rate: 71.0, symbol: "D" }],
     wallets: [
@@ -379,7 +363,12 @@ export default function ClaimHubPage() {
                   : "border-border bg-surface text-foreground hover:bg-muted"
               }`}
             >
-              <span className="text-2xl">{c.flag}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/flags/${c.code.toLowerCase()}.png`}
+                alt=""
+                className="h-6 w-9 rounded-[4px] object-cover ring-1 ring-black/10"
+              />
               <span className="text-xs font-bold mt-1 truncate max-w-full">{c.name}</span>
               <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
                 1 USD = {c.currencies[0].symbol}{c.currencies[0].rate} {c.currencies[0].code}
@@ -392,7 +381,12 @@ export default function ClaimHubPage() {
         <div className="rounded-2xl border border-brand-200 bg-brand-50/50 p-4 text-xs flex flex-col gap-2.5">
           <div className="flex items-center justify-between font-bold border-b border-brand-200/60 pb-2">
             <span className="text-brand-800 flex items-center gap-1.5 text-sm">
-              <span>{selectedCountry.flag}</span> {selectedCountry.name} Disburse Channels
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/flags/${selectedCountry.code.toLowerCase()}.png`}
+                alt=""
+                className="h-4 w-6 rounded-[3px] object-cover ring-1 ring-black/10"
+              /> {selectedCountry.name} Disburse Channels
             </span>
             <span className="text-brand-700 font-mono">
               Phone Prefix: {selectedCountry.phonePrefix}

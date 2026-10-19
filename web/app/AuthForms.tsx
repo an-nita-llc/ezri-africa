@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, CreditCard, Fingerprint, Globe, KeyRound, Loader2, Lock, ShieldCheck, Wallet, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard, Fingerprint, Globe, KeyRound, Loader2, Lock, Plane, ShieldCheck, Wallet, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authButtonClass, authInputClass } from "@/components/auth/classes";
@@ -334,30 +334,30 @@ export function SignInTabs() {
 }
 
 const DIASPORA_COUNTRIES = [
-  "United States (🇺🇸)",
-  "United Kingdom (🇬🇧)",
-  "Canada (🇨🇦)",
-  "European Union (🇪🇺)",
-  "Australia (🇦🇺)",
+  "United States",
+  "United Kingdom",
+  "Canada",
+  "European Union",
+  "Australia",
   "Other Diaspora Country",
 ];
 
 const AFRICAN_COUNTRIES = [
-  "Liberia (🇱🇷)",
-  "Ghana (🇬🇭)",
-  "Nigeria (🇳🇬)",
-  "Senegal (🇸🇳)",
-  "Kenya (🇰🇪)",
-  "South Africa (🇿🇦)",
-  "Côte d'Ivoire (🇨🇮)",
-  "Tanzania (🇹🇿)",
-  "Uganda (🇺🇬)",
-  "Rwanda (🇷🇼)",
-  "Ethiopia (🇪🇹)",
-  "Egypt (🇪🇬)",
-  "Zimbabwe (🇿🇼)",
-  "Sierra Leone (🇸🇱)",
-  "Gambia (🇬🇲)",
+  "Liberia",
+  "Ghana",
+  "Nigeria",
+  "Senegal",
+  "Kenya",
+  "South Africa",
+  "Côte d'Ivoire",
+  "Tanzania",
+  "Uganda",
+  "Rwanda",
+  "Ethiopia",
+  "Egypt",
+  "Zimbabwe",
+  "Sierra Leone",
+  "Gambia",
 ];
 
 const DIASPORA_PROVIDERS = [
@@ -385,10 +385,10 @@ export function SignupForm() {
   const [regionType, setRegionType] = useState<"DIASPORA" | "AFRICA">("DIASPORA");
 
   // Step 2: Country & Provider
-  const [diasporaCountry, setDiasporaCountry] = useState("United States (🇺🇸)");
+  const [diasporaCountry, setDiasporaCountry] = useState("United States");
   const [diasporaProvider, setDiasporaProvider] = useState("PayPal Sandbox Escrow (Default)");
 
-  const [africanCountry, setAfricanCountry] = useState("Liberia (🇱🇷)");
+  const [africanCountry, setAfricanCountry] = useState("Liberia");
   const [africanProvider, setAfricanProvider] = useState("MTN Mobile Money");
 
   // Step 3: User Details
@@ -481,24 +481,26 @@ export function SignupForm() {
             <button
               type="button"
               onClick={() => setRegionType("DIASPORA")}
-              className={`py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
+              className={`inline-flex items-center justify-center gap-1.5 py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
                 regionType === "DIASPORA"
                   ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs ring-2 ring-brand-500/20"
                   : "border-border bg-surface text-foreground hover:bg-muted"
               }`}
             >
-              ✈️ Diaspora Abroad (Sender)
+              <Plane aria-hidden="true" className="size-3.5" />
+              Diaspora Abroad (Sender)
             </button>
             <button
               type="button"
               onClick={() => setRegionType("AFRICA")}
-              className={`py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
+              className={`inline-flex items-center justify-center gap-1.5 py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
                 regionType === "AFRICA"
                   ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs ring-2 ring-brand-500/20"
                   : "border-border bg-surface text-foreground hover:bg-muted"
               }`}
             >
-              🌍 Based in Africa (Receiver)
+              <Globe aria-hidden="true" className="size-3.5" />
+              Based in Africa (Receiver)
             </button>
           </div>
         </div>

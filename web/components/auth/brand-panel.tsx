@@ -1,7 +1,15 @@
-import { Link2, MessagesSquare, ShieldCheck, WifiOff } from "lucide-react";
-import { Logo } from "@/components/brand/logo";
+import type { LucideIcon } from "lucide-react";
+import { Link2, MessagesSquare, ShieldCheck } from "lucide-react";
+import { Logo, LogoMark } from "@/components/brand/logo";
 
-const highlights = [
+type Highlight = {
+  icon?: LucideIcon;
+  mark?: boolean;
+  title: string;
+  description: string;
+};
+
+const highlights: Highlight[] = [
   {
     icon: MessagesSquare,
     title: "Chat, lock, prove",
@@ -18,7 +26,7 @@ const highlights = [
     description: "Receivers get a simple link to upload an invoice and get mobile money.",
   },
   {
-    icon: WifiOff,
+    mark: true,
     title: "Offline queue & AI check",
     description: "Draft transfers offline, auto-send when online, verified by strict AI.",
   },
@@ -58,21 +66,25 @@ export function BrandPanel() {
 
       <div className="relative flex flex-col gap-9">
         <div>
-          <h2 className="max-w-md text-3xl font-bold leading-tight tracking-tight xl:text-4xl">
+          <h2 className="max-w-lg text-3xl font-bold leading-tight tracking-tight xl:text-4xl">
             One secure place for your remittance life.
           </h2>
-          <p className="mt-3 max-w-md text-sm leading-6 text-white/70">
+          <p className="mt-3 max-w-lg text-sm leading-6 text-white/70">
             Send money home for school, food, health & emergency — purpose-locked with strict photo proof and mobile money disburse.
           </p>
         </div>
-        <ul className="flex flex-col gap-5">
+        <ul className="mt-2 flex flex-col gap-5">
           {highlights.map((highlight) => {
             const Icon = highlight.icon;
             return (
               <li key={highlight.title} className="flex gap-4">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10 backdrop-blur-sm">
-                  <Icon aria-hidden="true" className="size-5 text-brand-300" />
-                </span>
+                {highlight.mark ? (
+                  <LogoMark size="md" />
+                ) : (
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10 backdrop-blur-sm">
+                    {Icon ? <Icon aria-hidden="true" className="size-5 text-brand-300" /> : null}
+                  </span>
+                )}
                 <span>
                   <span className="block text-sm font-semibold">
                     {highlight.title}

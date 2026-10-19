@@ -19,6 +19,7 @@ import {
   Phone,
   RefreshCw,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   TrendingUp,
   UploadCloud,
@@ -47,7 +48,6 @@ type Provider = {
 type CountryConfig = {
   code: string;
   name: string;
-  flag: string;
   phonePrefix: string;
   currencies: Currency[];
   wallets: Provider[];
@@ -58,7 +58,6 @@ const COUNTRIES: CountryConfig[] = [
   {
     code: "LR",
     name: "Liberia",
-    flag: "🇱🇷",
     phonePrefix: "+231",
     currencies: [
       { code: "LRD", name: "Liberian Dollar", rate: 192.0, symbol: "L$" },
@@ -78,7 +77,6 @@ const COUNTRIES: CountryConfig[] = [
   {
     code: "GH",
     name: "Ghana",
-    flag: "🇬🇭",
     phonePrefix: "+233",
     currencies: [
       { code: "GHS", name: "Ghanaian Cedi", rate: 15.2, symbol: "GH₵" },
@@ -98,7 +96,6 @@ const COUNTRIES: CountryConfig[] = [
   {
     code: "NG",
     name: "Nigeria",
-    flag: "🇳🇬",
     phonePrefix: "+234",
     currencies: [
       { code: "NGN", name: "Nigerian Naira", rate: 1620.0, symbol: "₦" },
@@ -119,7 +116,6 @@ const COUNTRIES: CountryConfig[] = [
   {
     code: "SN",
     name: "Senegal & WAEMU",
-    flag: "🇸🇳",
     phonePrefix: "+221",
     currencies: [
       { code: "XOF", name: "West African CFA Franc", rate: 610.0, symbol: "CFA" },
@@ -138,7 +134,6 @@ const COUNTRIES: CountryConfig[] = [
   {
     code: "KE",
     name: "Kenya",
-    flag: "🇰🇪",
     phonePrefix: "+254",
     currencies: [
       { code: "KES", name: "Kenyan Shilling", rate: 129.0, symbol: "KSh" },
@@ -477,7 +472,12 @@ export default function ClaimPage() {
                         : "border-border bg-surface text-foreground hover:bg-muted"
                     }`}
                   >
-                    <span className="text-xl">{c.flag}</span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/flags/${c.code.toLowerCase()}.png`}
+                      alt=""
+                      className="h-5 w-8 rounded-[4px] object-cover ring-1 ring-black/10"
+                    />
                     <span className="text-xs truncate max-w-full">{c.name}</span>
                   </button>
                 );
@@ -525,11 +525,11 @@ export default function ClaimPage() {
                   setPCategory("WALLET");
                   if (currentCountry.wallets.length > 0) setProvider(currentCountry.wallets[0].id);
                 }}
-                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl transition-all ${
+                className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 px-2 text-xs font-bold rounded-xl transition-all ${
                   pCategory === "WALLET" ? "bg-surface text-foreground shadow-xs" : "text-muted-foreground"
                 }`}
               >
-                📱 Mobile Money Wallets
+                <Smartphone aria-hidden="true" className="size-3.5" /> Mobile Money Wallets
               </button>
               <button
                 type="button"
@@ -537,11 +537,11 @@ export default function ClaimPage() {
                   setPCategory("BANK");
                   if (currentCountry.banks.length > 0) setProvider(currentCountry.banks[0].id);
                 }}
-                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl transition-all ${
+                className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 px-2 text-xs font-bold rounded-xl transition-all ${
                   pCategory === "BANK" ? "bg-surface text-foreground shadow-xs" : "text-muted-foreground"
                 }`}
               >
-                🏦 Commercial Bank Wires
+                <Building2 aria-hidden="true" className="size-3.5" /> Commercial Bank Wires
               </button>
             </div>
           </div>

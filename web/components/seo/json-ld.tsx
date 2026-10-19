@@ -5,7 +5,7 @@ export function JsonLd() {
     "name": "Ezri Africa",
     "alternateName": "Ezri Africa Remittance",
     "url": "https://ezri-africa.com",
-    "logo": "https://ezri-africa.com/icon.svg",
+    "logo": "https://ezri-africa.com/brand/annita-mark.png",
     "description": "Pan-African purpose-locked remittance platform. Collects foreign PayPal payments abroad and disburses local mobile money & bank wires across 15 African nations.",
     "foundingLocation": "Monrovia, Liberia",
     "parentOrganization": {
