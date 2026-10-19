@@ -1,5 +1,14 @@
 "use client";
 
+// Bryntum styles ride with this lazily-loaded chunk (imported by the
+// dashboard page only when the Timeline tab opens) instead of eager
+// route-level CSS, keeping the dashboard route compile light. Both
+// widgets render as light "report paper" panels in either app theme.
+import "@bryntum/scheduler/scheduler.css";
+import "@bryntum/scheduler/stockholm-light.css";
+import "@bryntum/scheduler/fontawesome/css/fontawesome.css";
+import "@bryntum/scheduler/fontawesome/css/solid.css";
+
 import { useEffect, useRef } from "react";
 import { Scheduler } from "@bryntum/scheduler";
 import type {

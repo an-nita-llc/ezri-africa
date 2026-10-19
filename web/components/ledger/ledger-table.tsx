@@ -1,5 +1,11 @@
 "use client";
 
+// AG Grid styles ride with this lazily-loaded chunk (imported by the
+// dashboard page only when the Table tab opens), keeping the dashboard
+// route compile light.
+import "ag-grid-community/styles/ag-grid.css";
+import "ag-grid-community/styles/ag-theme-quartz.css";
+
 import { useMemo } from "react";
 import { AgGridReact } from "ag-grid-react";
 import {
