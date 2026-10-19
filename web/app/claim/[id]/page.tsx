@@ -29,7 +29,7 @@ import {
 import { Logo } from "@/components/brand/logo";
 import { loadSession, type Session } from "../../session";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 type Currency = {
   code: string;

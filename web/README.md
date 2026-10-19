@@ -1,7 +1,7 @@
 # Ezri Africa — Web Frontend (Next.js 16 PWA)
 
 > **Role:** Fortune 500 mobile-first Next.js 16 PWA with Light Mode default, full-bleed AI chat stream, pan-African receiver claim engine, multi-virtual card vault, and AG-Grid ledger.
-> **Port:** `3000`
+> **Port:** `3000` · **Live:** https://ezri-africa.com
 
 ---
 
@@ -33,7 +33,7 @@
 
 ```bash
 pnpm install       # Install dependencies
-pnpm run dev       # Start Next.js dev server on http://localhost:3000
+pnpm run dev       # Start the Next.js dev server (port 3000)
 pnpm run typecheck # Run TypeScript typecheck (0 errors)
 pnpm run build     # Production Next.js build
 ```

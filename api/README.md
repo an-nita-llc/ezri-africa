@@ -1,7 +1,7 @@
 # Ezri Africa — Monolithic FastAPI Backend (Legacy / Direct Mode)
 
 > **Role:** Monolithic FastAPI server containing direct HTTP routes, SQLite/Postgres ledger, OpenRouter AI guard, and PayPal Orders v2 / Refunds client.
-> **Port:** `8000`
+> **Port:** `8000` · **Deployed:** https://api.ezri-africa.com (health check `/api/health`)
 
 ---
 

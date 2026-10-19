@@ -4,7 +4,7 @@
     "description": "Judge quick-run: health -> parse -> create -> capture -> prove (PASS) -> dashboard. All mock-first, zero keys.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [{ "key": "base", "value": "http://localhost:8000" }],
+  "variable": [{ "key": "base", "value": "https://api.ezri-africa.com" }],
   "item": [
     { "name": "auth demo login", "request": { "method": "POST", "url": "{{base}}/api/auth/demo" } },
     { "name": "auth signup", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\": \"John\", \"email\": \"john@x.com\", \"password\": \"secret1\"}" }, "url": "{{base}}/api/auth/signup" } },

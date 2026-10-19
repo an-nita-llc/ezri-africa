@@ -43,7 +43,7 @@ import { Modal } from "@/components/ui/modal";
 import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf, totalOf } from "../fx";
 import { authHeaders, loadSession, type Session } from "../session";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 type TimelineCompType = React.ComponentType<{ rows: any[]; onOpen?: (id: string) => void }>;
 type TableCompType = React.ComponentType<{ rows: any[]; onOpen?: (id: string) => void }>;

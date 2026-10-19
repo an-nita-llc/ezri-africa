@@ -8,7 +8,7 @@ import { AuthCard } from "@/components/auth/auth-card";
 import { authButtonClass, authInputClass } from "@/components/auth/classes";
 import { saveSession } from "../session";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 function OtpVerifyForm() {
   const router = useRouter();

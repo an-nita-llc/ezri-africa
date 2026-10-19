@@ -359,7 +359,7 @@ export function SettingsContent() {
           <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-3 py-2.5">
             <span className="font-bold text-foreground">API</span>
             <span className="font-mono font-bold text-foreground">
-              {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}
+              {process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com"}
             </span>
           </div>
         </div>

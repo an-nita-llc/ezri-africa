@@ -30,7 +30,7 @@ import PayPalButtons from "./PayPalButtons";
 import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf, totalOf } from "./fx";
 import { authHeaders, loadSession, type Session } from "./session";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 const PP_CID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
 const DEMO_PIN = "1234";
 const SPEECH_KEY = "ezri:speech_enabled";

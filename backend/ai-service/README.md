@@ -40,5 +40,5 @@
 ## Running Locally
 
 ```bash
-python backend/ai-service/main.py   # Runs on http://0.0.0.0:8001
+python backend/ai-service/main.py   # Runs on port 8001
 ```

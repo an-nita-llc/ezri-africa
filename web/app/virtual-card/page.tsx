@@ -24,7 +24,7 @@ import { LogoMark } from "@/components/brand/logo";
 import { Modal } from "@/components/ui/modal";
 import { authHeaders, loadSession, type Session } from "../session";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 type VirtualCard = {
   id: string;

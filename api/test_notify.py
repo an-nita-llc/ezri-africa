@@ -50,9 +50,9 @@ def test_post_event_noop_without_url(monkeypatch):
     assert post_event("transfer.held", build_event(_row())) is False
 
 
-def test_post_event_never_raises_on_connection_refused(monkeypatch):
-    # Nothing listens on port 9 — must return False, not raise.
-    monkeypatch.setenv("NOTIFY_WEBHOOK_URL", "http://127.0.0.1:9/hook")
+def test_post_event_never_raises_on_unreachable_host(monkeypatch):
+    # .invalid never resolves (RFC 6761) — must return False, not raise.
+    monkeypatch.setenv("NOTIFY_WEBHOOK_URL", "http://unreachable.invalid:9/hook")
     assert post_event("transfer.held", build_event(_row())) is False
 
 

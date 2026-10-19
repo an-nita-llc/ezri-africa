@@ -8,11 +8,11 @@
 ## Responsibilities
 
 1. **Directional Request Routing**:
-   - Proxies AI intent classification & receipt vision inspection requests to `ai-service` (`http://localhost:8001`).
-   - Proxies database, escrow lifecycle, user authentication, and ledger queries to `db-service` (`http://localhost:8002`).
+   - Proxies AI intent classification & receipt vision inspection requests to `ai-service` (port 8001, or `AI_SERVICE_URL`).
+   - Proxies database, escrow lifecycle, user authentication, and ledger queries to `db-service` (port 8002, or `DB_SERVICE_URL`).
 
 2. **CORS & Domain Whitelisting**:
-   - Handles cross-origin requests from Next.js web frontend (`http://localhost:3000`) and mobile PWA clients.
+   - Handles cross-origin requests from the deployed web frontend and mobile PWA clients (via `CORS_ALLOWED_ORIGINS`).
 
 3. **Multi-Service Health Monitoring**:
    - `GET /api/health` queries both underlying microservices (`ai-service` and `db-service`) and returns consolidated health statuses (`ai_service_online`, `db_service_online`).
@@ -36,5 +36,5 @@
 ## Running Locally
 
 ```bash
-python backend/gateway/main.py   # Runs on http://0.0.0.0:8000
+python backend/gateway/main.py   # Runs on port 8000
 ```

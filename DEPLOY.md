@@ -68,7 +68,9 @@ Apply `render.yaml` as a Blueprint, or create them manually:
 ### 4. Point the web build at the API
 
 `NEXT_PUBLIC_API_URL` is inlined into the client bundle at build time. The
-API is served at `https://api.ezri-africa.com`.
+API is served at `https://api.ezri-africa.com` — the web client code also
+defaults to that same URL at runtime, so a build made without the variable
+still targets the deployed API.
 
 - **Git-backed Node service** (currently live): set the variable in Render →
   web service → **Environment**, then redeploy — a rebuild is required so the
@@ -90,49 +92,26 @@ GitHub as the repository secret `RENDER_DEPLOY_HOOK_URL`. The workflow then
 triggers Render after every successful image push. Without it, click
 **Manual Deploy → Deploy latest commit** in Render after CI is green.
 
-## Custom domain: ezri-africa.com
+## Custom domains (live)
 
-The domain's DNS is managed by **Cloudflare**. Today the apex and `www` point
-at a different Vercel site (the career platform). Moving them to Render takes
-that site offline.
+All three hostnames are attached to their Render services, verified, and
+serving with active TLS certificates:
 
-**Safe order:** if you want to keep the career site, first add
-`careers.ezri-africa.com` to the Vercel project, create the matching Cloudflare
-CNAME, and confirm it loads. Only then move the main records.
+| Domain | Render service | Cloudflare record (Annita LLC zone) |
+| --- | --- | --- |
+| `ezri-africa.com`, `www.ezri-africa.com` | `ezri-web` | apex `@` and `www` → `ezri-africa.onrender.com`, **DNS only (grey cloud)** |
+| `api.ezri-africa.com` | `ezri-api` | `api` CNAME → `ezri-api.onrender.com`, **DNS only (grey cloud)** |
 
-1. Render → the production web service (currently `ezri-africa`) →
-   **Settings → Custom Domains** → add:
-   - `ezri-africa.com`
-   - `www.ezri-africa.com`
-2. In Cloudflare DNS, replace the current Vercel records:
-   - Delete the apex `A` records (currently `64.29.17.1`, `216.198.79.1`).
-   - Delete the `www` CNAME (currently `b231e7ad6bfbe744.vercel-dns-017.com`).
-   - Add `www` **CNAME** → the target Render shows
-     (normally `ezri-africa.onrender.com`).
-   - Add apex `@` **CNAME** → the same Render target, using Cloudflare's
-     automatic CNAME flattening. If you prefer an `A` record, use the IP
-     Render displays in the custom-domain panel.
-   - Keep both records **DNS only (grey cloud)** until Render has issued the
-     TLS certificate. You can enable the Cloudflare proxy afterwards.
-3. Wait for Render to show the domain as **Verified** with an active
-   certificate.
-4. Set the API's `CORS_ALLOWED_ORIGINS` to
-   `https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com`.
-5. Set `NEXT_PUBLIC_API_URL` to the API's URL and redeploy the web service.
+- The old Vercel career-site records on the apex were removed; the Render web
+  service serves `ezri-africa.com`.
+- Cloudflare email records (MX / DKIM / SPF / DMARC) were left untouched.
+- Render URL fallbacks keep working: `ezri-africa.onrender.com` (web),
+  `ezri-api.onrender.com` (API).
+- Hobby workspaces include 2 custom domains; the third costs $0.25/month.
 
-### API subdomain: api.ezri-africa.com
-
-1. Render → `ezri-api` → **Settings → Custom Domains** → add
-   `api.ezri-africa.com`. Render displays the CNAME target
-   (`ezri-api.onrender.com`).
-2. Cloudflare DNS → add `api` **CNAME** → the target Render shows,
-   **DNS only (grey cloud)**, so Render can issue the certificate.
-3. Wait for Render to report it verified with an active certificate, then
-   test `https://api.ezri-africa.com/api/health`.
-
-The API stays reachable at `https://ezri-api.onrender.com` as a fallback.
-Hobby workspaces include 2 custom domains; if the web service already uses
-both, Render charges $0.25/month for the API subdomain.
+To attach another hostname later: Render → service → **Settings → Custom
+Domains** → add it, then add the CNAME Render shows in Cloudflare DNS with the
+proxy **off (grey cloud)**, and wait for *Verified*.
 
 The `https://ezri-africa.onrender.com` URL keeps working after the domain is
 attached, so it remains a safe fallback for the demo.
@@ -142,6 +121,8 @@ attached, so it remains a safe fallback for the demo.
 - **Never run `pnpm build` locally.** It is the exact workload that exhausted
   the laptop and Render. CI performs every production build.
 - Safe local commands: `pnpm dev`, `pnpm typecheck`, `pnpm test`.
+- Fully-local stacks: set `NEXT_PUBLIC_API_URL` and `CORS_ALLOWED_ORIGINS`
+  explicitly — the code defaults point at the deployed production URLs.
 - Do not commit `.next/`, `node_modules/`, or build artifacts.
 
 ## Fallback: Git-backed Node service (currently live)

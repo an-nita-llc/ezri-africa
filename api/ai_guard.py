@@ -165,7 +165,7 @@ async def parse_intent(text: str, note: str = "") -> dict:
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {OPENROUTER_KEY}",
-                    "HTTP-Referer": os.environ.get("OPENROUTER_SITE_URL", "http://localhost:3000"),
+                    "HTTP-Referer": os.environ.get("OPENROUTER_SITE_URL", "https://ezri-africa.com"),
                     "X-Title": os.environ.get("OPENROUTER_SITE_NAME", "Ezri Africa"),
                 },
                 json={

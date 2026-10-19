@@ -40,5 +40,5 @@
 ## Running Locally
 
 ```bash
-python backend/db-service/main.py   # Runs on http://0.0.0.0:8002
+python backend/db-service/main.py   # Runs on port 8002
 ```

@@ -8,13 +8,16 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://127.0.0.1:8001")
-DB_SERVICE_URL = os.environ.get("DB_SERVICE_URL", "http://127.0.0.1:8002")
+AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://ai-service:8001")
+DB_SERVICE_URL = os.environ.get("DB_SERVICE_URL", "http://db-service:8002")
 
 _origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 _CORS_ORIGINS = [
     o.strip()
-    for o in (_origins_env or "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    for o in (
+        _origins_env
+        or "https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com"
+    ).split(",")
     if o.strip()
 ]
 

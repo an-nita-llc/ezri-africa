@@ -25,14 +25,11 @@ _origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 _CORS_ORIGINS = [
     o.strip()
     for o in (
-        _origins_env or "https://an-nita.com,https://www.an-nita.com"
+        _origins_env
+        or "https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com"
     ).split(",")
     if o.strip() and o.strip() != "*"
-] or ["https://an-nita.com"]
-if not _origins_env:
-    # Local demo default: allow the dev web server too (skipped when the
-    # env var is explicitly set, i.e. real deployments).
-    _CORS_ORIGINS += ["http://localhost:3000", "http://127.0.0.1:3000"]
+] or ["https://ezri-africa.com"]
 
 app = FastAPI(
     title="Ezri Africa — Proof Before Payout API",

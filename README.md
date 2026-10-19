@@ -4,6 +4,8 @@
 > Talk → Lock → Pay → **Prove Before Payout**.
 > PayPal collects foreign remittance in US/EU; OpenRouter AI guards every transaction step; Mobile Money Wallets, Commercial Banks & Virtual Cards disburse funds locally across 15 African nations.
 
+**Live demo:** <https://ezri-africa.com> · **API:** <https://api.ezri-africa.com> (health check `/api/health`)
+
 ![Next.js 16](https://img.shields.io/badge/Next.js-16.4-black?logo=next.js)
 ![React 19](https://img.shields.io/badge/React-19.3-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -223,7 +225,7 @@ python backend/gateway/main.py
 cd web && pnpm run dev
 ```
 
-Open <http://localhost:3000/login> and click **"Continue with One-Tap Demo"**.
+Open the live app at <https://ezri-africa.com/login> and click **"Continue with One-Tap Demo"** (API base: <https://api.ezri-africa.com>).
 
 ---
 

@@ -3,7 +3,7 @@ import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
 
 export type Session = { token: string; email: string; name: string };
 const KEY = "ezri_session";
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 export async function loadSession(): Promise<Session | null> {
   try {
