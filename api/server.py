@@ -207,9 +207,11 @@ async def escrow_prove(
         raise HTTPException(404, "escrow not found")
     if row["status"] not in ("HELD", "NEEDS_RETRY", "DRAFT"):
         raise HTTPException(400, f"cannot prove in status {row['status']}")
-    prov = provider.upper()
-    if prov not in ("ORANGE", "MTN"):
-        raise HTTPException(400, "provider must be ORANGE or MTN")
+    label = provider.strip()
+    if not label:
+        raise HTTPException(400, "provider required")
+    up = label.upper()
+    prov = "MTN" if "MTN" in up else "ORANGE" if "ORANGE" in up else label[:48]
     data = await proof.read()
     verdict, reason = strict_proof_check(row["tag"], row["amount_usd"], proof.filename or "", len(data), f"{note} {row['note']}")
     if verdict == "PASS":
