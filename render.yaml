@@ -7,8 +7,16 @@ services:
     startCommand: "uvicorn server:app --app-dir api --host 0.0.0.0 --port $PORT"
     healthCheckPath: /api/health
     envVars:
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com
       - key: PAYPAL_BASE_URL
         value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false # empty = mock PayPal (zero-key demo mode)
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false # empty = heuristic AI guard
       - key: DEMO_EXPIRY_MINUTES
         value: 10
       - key: DATABASE_URL

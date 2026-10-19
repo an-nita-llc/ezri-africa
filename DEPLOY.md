@@ -55,11 +55,15 @@ Apply `render.yaml` as a Blueprint, or create them manually:
 - Build command: `pip install -r api/requirements.txt`
 - Start command: `uvicorn server:app --app-dir api --host 0.0.0.0 --port $PORT`
 - Health check path: `/api/health`
-- Environment: `DATABASE_URL`, PayPal, Upstash, and Cloudflare R2 values from
-  `.env.example` (set them in the dashboard only — never in git)
-- `CORS_ALLOWED_ORIGINS`: `https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com`
-  (comma-separated, no spaces). The `onrender.com` origin is handy while
-  testing; remove it once the custom domain is live.
+- Required environment variable:
+  `CORS_ALLOWED_ORIGINS=https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com`
+  (comma-separated, no spaces). Without it the API only trusts
+  `an-nita.com` and the site's calls are blocked by the browser.
+- Everything else is optional — with **zero keys** the API runs in full demo
+  mode: mock PayPal, SQLite storage, in-process cache, heuristic AI guard.
+  Set `DATABASE_URL` (Prisma Postgres) only if you want data to survive
+  restarts and redeploys. PayPal/Upstash/R2/OpenRouter values come from
+  `.env.example` — dashboard only, never in git.
 
 ### 4. Point the web build at the API
 
