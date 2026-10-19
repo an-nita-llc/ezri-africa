@@ -154,6 +154,29 @@ Copy-Item web/.env.example web/.env.local   # Next.js keys
 - With every secret blank the gateway still runs the full zero-key demo:
   mock PayPal, SQLite, heuristic AI guard.
 
+## Neon Postgres (current database)
+
+The repo carries the Neon policy in `neon.ts` and is linked to project
+`orange-frog-32627767`, branch `production`. The local link file `.neon` is
+gitignored, so a fresh clone links once:
+
+```powershell
+neon login
+neon link --project-id orange-frog-32627767 --branch production
+neon deploy          # apply the branch policy + pull env vars into .env
+```
+
+`neon deploy` writes two values into `.env`:
+
+- `DATABASE_URL` — pooled (`-pooler` host); used for normal application traffic.
+- `DATABASE_URL_UNPOOLED` — direct; used only for the one-time schema creation in
+  `api/ledger.py`, per Neon's guidance. Pooled connections are for queries;
+  schema work goes over the direct endpoint.
+
+Add both to Render `ezri-api`, plus `OPENROUTER_API_KEY` and
+`NOTIFY_WEBHOOK_URL`. `GET /api/health` should then report
+`db: "postgres"`, `ai_guard: "openrouter"`, and `notify_webhook: true`.
+
 ## Fallback: Git-backed Node service (currently live)
 
 The current deployment at `https://ezri-africa.onrender.com` uses this path.

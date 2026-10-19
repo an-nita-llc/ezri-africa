@@ -7,12 +7,21 @@
   production swaps to Qwen vision. Always returns PASS/FAIL + reason so video shows reasoning.
 """
 from __future__ import annotations
+import json
 import os
 import re
 
 import httpx
 
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODELS = [
+    m.strip()
+    for m in os.environ.get(
+        "OPENROUTER_MODELS",
+        "deepseek/deepseek-chat,qwen/qwen-2.5-72b-instruct",
+    ).split(",")
+    if m.strip()
+]
 USD_LRD = 194.50
 FEE_PCT = float(os.environ.get("EZRI_FEE_PCT", "0.02"))  # Ezri platform fee: 2% of every transaction
 TAGS = ["FOOD", "SCHOOL", "HEALTH", "RENT", "EMERGENCY", "GENERAL"]
@@ -153,41 +162,64 @@ def rule_parse(text: str) -> dict:
     }
 
 
+async def _llm_extract(text: str, note: str) -> tuple[dict, str] | None:
+    """Try each configured OpenRouter model; return (json, model) or None.
+
+    The first model is the primary. If its upstream pool is rate-limited or it
+    returns malformed JSON, the next model is tried, then the caller falls back
+    to the deterministic rules. Never raises.
+    """
+    if not OPENROUTER_KEY:
+        return None
+    system = (
+        "Extract JSON only: {tag: FOOD|SCHOOL|HEALTH|RENT|EMERGENCY|GENERAL, "
+        "amount_usd: number|null, recipient: string}. Tag by purpose. "
+        "amount_usd null when no amount is stated."
+    )
+    for model in OPENROUTER_MODELS:
+        try:
+            async with httpx.AsyncClient(timeout=15) as c:
+                r = await c.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_KEY}",
+                        "HTTP-Referer": os.environ.get("OPENROUTER_SITE_URL", "https://ezri-africa.com"),
+                        "X-Title": os.environ.get("OPENROUTER_SITE_NAME", "Ezri Africa"),
+                    },
+                    json={
+                        "model": model,
+                        "temperature": 0,
+                        "max_tokens": 120,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": f"{text} NOTE:{note}"},
+                        ],
+                    },
+                )
+                r.raise_for_status()
+                content = r.json()["choices"][0]["message"]["content"]
+                start, end = content.find("{"), content.rfind("}") + 1
+                if start < 0 or end <= start:
+                    continue
+                return json.loads(content[start:end]), model
+        except Exception:
+            continue
+    return None
+
+
 async def parse_intent(text: str, note: str = "") -> dict:
     base = rule_parse(f"{text} {note}")
+    base["ai_source"] = "heuristic"
     # Conversational intents never reach money extraction — the agent only
     # refines amount/tag when the rules already see a real transfer request.
-    if base["intent"] not in ("transfer", "needs_amount") or not OPENROUTER_KEY:
+    if base["intent"] not in ("transfer", "needs_amount"):
         return base
-    try:
-        async with httpx.AsyncClient(timeout=25) as c:
-            r = await c.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_KEY}",
-                    "HTTP-Referer": os.environ.get("OPENROUTER_SITE_URL", "https://ezri-africa.com"),
-                    "X-Title": os.environ.get("OPENROUTER_SITE_NAME", "Ezri Africa"),
-                },
-                json={
-                    "model": "deepseek/deepseek-chat",
-                    "temperature": 0,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Extract JSON only: {tag: FOOD|SCHOOL|HEALTH|RENT|EMERGENCY|GENERAL, amount_usd: number|null, recipient: string}. Tag by purpose. amount_usd null when no amount is stated.",
-                        },
-                        {"role": "user", "content": f"{text} NOTE:{note}"},
-                    ],
-                },
-            )
-            r.raise_for_status()
-            import json as _json
-
-            content = r.json()["choices"][0]["message"]["content"]
-            start, end = content.find("{"), content.rfind("}") + 1
-            data = _json.loads(content[start:end])
-    except Exception:
+    extracted = await _llm_extract(text, note)
+    if not extracted:
         return base
+    data, model = extracted
+    base["ai_source"] = "openrouter"
+    base["ai_model"] = model
     tag = str(data.get("tag", base["tag"])).upper()
     if tag not in TAGS:
         tag = base["tag"]

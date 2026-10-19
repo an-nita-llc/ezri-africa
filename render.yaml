@@ -23,6 +23,10 @@ services:
         value: 10
       - key: DATABASE_URL
         sync: false # Neon/Prisma Postgres URL -- set in Render dashboard, never commit
+      - key: DATABASE_URL_UNPOOLED
+        sync: false # optional direct Neon URL for schema initialization
+      - key: OPENROUTER_MODELS
+        value: deepseek/deepseek-chat,qwen/qwen-2.5-72b-instruct
       - key: NOTIFY_WEBHOOK_URL
         sync: false # Zapier Catch Hook -- empty = events only in the local log
       - key: WEB_BASE_URL

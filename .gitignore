@@ -24,3 +24,4 @@ uploads/
 # IDE / OS
 .idea/
 .DS_Store
+.neon

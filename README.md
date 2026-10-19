@@ -247,10 +247,12 @@ values always win. `GET /api/health` reports what was actually picked up:
 | Variable | Needed? | What it does | Where to get it | Without it |
 |---|---|---|---|---|
 | `DATABASE_URL` | Recommended | Postgres persistence for users, sessions, escrows, cards, prefs, OTPs, reset tokens, and events | [Neon](https://neon.tech): create a free project, then Dashboard -> Connect -> copy the pooled connection string and add `?sslmode=require` if it is not already there. Prisma Postgres works too. | SQLite at `api/ezri.db`; data resets on every Render redeploy |
+| `DATABASE_URL_UNPOOLED` | No | Direct Neon URL used only for one-time schema initialization | The Neon CLI writes it automatically (`neon env pull`) | Schema init runs over the pooled URL (works, but less ideal) |
 | `PAYPAL_CLIENT_ID` | Optional | PayPal Orders v2 sandbox OAuth | [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox): Apps & Credentials -> Sandbox -> Create App -> copy Client ID | Mock PayPal (`MOCK-` order/capture ids, mock approval page) |
 | `PAYPAL_CLIENT_SECRET` | Optional | Secret for the same PayPal sandbox app | Same screen as the Client ID | Mock PayPal |
 | `PAYPAL_BASE_URL` | No | PayPal API host | Default `https://api-m.sandbox.paypal.com`; use `https://api-m.paypal.com` only for live money | Sandbox host |
-| `OPENROUTER_API_KEY` | Optional | LLM intent parsing and vision receipt checks | [OpenRouter Keys](https://openrouter.ai/keys): Create Key, copy `sk-or-v1-...`, add a few dollars of credit | Deterministic heuristic guard (still parses intent and checks photos) |
+| `OPENROUTER_API_KEY` | Optional | LLM intent parsing: amount, purpose tag, and recipient extraction | [OpenRouter Keys](https://openrouter.ai/keys): Create Key, copy `sk-or-v1-...`, add a few dollars of credit | Deterministic heuristic guard (receipt proof is deterministic either way) |
+| `OPENROUTER_MODELS` | No | Comma-separated fallback chain, tried in order | Default `deepseek/deepseek-chat,qwen/qwen-2.5-72b-instruct` | Default chain |
 | `OPENROUTER_SITE_URL` | No | Attribution header sent to OpenRouter | Default `https://ezri-africa.com` | Default |
 | `OPENROUTER_SITE_NAME` | No | Attribution label sent to OpenRouter | Default `Ezri Africa hackathon demo` | Default |
 | `NOTIFY_WEBHOOK_URL` | Optional | Zapier Catch Hook: lifecycle events, OTP codes, and password-reset links | [Zapier](https://zapier.com): Create Zap -> Trigger `Webhooks by Zapier` -> `Catch Hook` -> copy the hook URL | OTP/reset codes are returned on screen as `demo_code` / `demo_token`; events stay in the API log |
@@ -265,6 +267,11 @@ Webhook payloads are flat JSON: `event` plus `email` and `code` for
 `auth.otp_requested`; `event` plus `email` and `reset_url` for
 `auth.reset_requested`; escrow fields (`escrow_id`, `status`, `tag`,
 `amount_usd`, `verdict`, ...) for transfer and proof events.
+
+PayPal account type: use a normal PayPal Developer login (a personal account is
+fine) to create the sandbox app. The money is received by a sandbox **Business**
+account, which the dashboard creates for you. Going live with real payments
+requires a PayPal **Business** account; the hackathon demo stays in sandbox.
 
 Reserved but not read by current code: `REDIS_URL`, `UPSTASH_REDIS_REST_URL`,
 `UPSTASH_REDIS_REST_TOKEN`, `CLOUDFLARE_R2_ACCOUNT_ID`,

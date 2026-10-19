@@ -13,6 +13,7 @@ import secrets
 from ai_guard import FEE_PCT  # single source of truth: 2% platform fee
 
 DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL", "").strip()
+DATABASE_URL_UNPOOLED = os.environ.get("DATABASE_URL_UNPOOLED", "").strip()
 DB = os.environ.get("EZRI_DB", os.path.join(os.path.dirname(__file__), "ezri.db"))
 
 POSTGRES_SCHEMA = """
@@ -170,8 +171,18 @@ def _get_pg_conn():
     conn.autocommit = True
     global _pg_initialized
     if not _pg_initialized:
-        with conn.cursor() as cur:
-            cur.execute(POSTGRES_SCHEMA)
+        # Neon guidance: run schema work over the direct (unpooled) endpoint;
+        # PgBouncer transaction pooling is for normal application traffic.
+        init_conn = conn
+        if DATABASE_URL_UNPOOLED and DATABASE_URL_UNPOOLED != DATABASE_URL:
+            init_conn = psycopg2.connect(DATABASE_URL_UNPOOLED)
+            init_conn.autocommit = True
+        try:
+            with init_conn.cursor() as cur:
+                cur.execute(POSTGRES_SCHEMA)
+        finally:
+            if init_conn is not conn:
+                init_conn.close()
         _pg_initialized = True
     return conn
 
