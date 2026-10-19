@@ -1,4 +1,4 @@
-// Escrow-timeline data model (Bryntum Scheduler) — pure, DOM-free, unit tested.
+// Escrow-timeline data model — pure, DOM-free, unit tested.
 // Resources = fixed purpose lanes (the lock taxonomy); events = escrows
 // positioned from creation to refund deadline, colored by live status.
 export interface TimelineRow {

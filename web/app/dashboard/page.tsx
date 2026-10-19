@@ -424,6 +424,15 @@ export default function DashboardPage() {
     return true;
   });
 
+  function openEscrow(id: string) {
+    setLedgerView("cards");
+    window.setTimeout(() => {
+      document
+        .getElementById(`escrow-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
   const totalVolume = rows.reduce((acc, r) => acc + (r.amount_usd || 0), 0);
   const totalFees = rows.reduce((acc, r) => acc + rowFee(r.amount_usd, r.fee_usd), 0);
   const heldVolume = rows
@@ -606,8 +615,64 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Ledger Cards View with PNG Image Receipt Download */}
-      <div className="flex flex-col gap-3 w-full">
+      {/* Ledger views: cards · AG Grid table · dependency-free timeline */}
+      <div
+        role="tablist"
+        aria-label="Ledger views"
+        className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1"
+      >
+        {(
+          [
+            { id: "cards", label: "Cards", icon: List },
+            { id: "table", label: "Table", icon: Table },
+            { id: "timeline", label: "Timeline", icon: CalendarRange },
+          ] as const
+        ).map((view) => {
+          const Icon = view.icon;
+          const active = ledgerView === view.id;
+          return (
+            <button
+              key={view.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setLedgerView(view.id)}
+              className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-bold transition-all ${
+                active
+                  ? "bg-surface text-foreground shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon aria-hidden="true" className="size-4 shrink-0" />
+              <span className="truncate">{view.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {ledgerView === "table" ? (
+        TableComp ? (
+          <TableComp rows={filteredRows} onOpen={openEscrow} />
+        ) : (
+          <div className="card py-12 text-center">
+            <p className="text-sm font-semibold">
+              Opening transfers table…
+            </p>
+          </div>
+        )
+      ) : ledgerView === "timeline" ? (
+        TimelineComp ? (
+          <TimelineComp rows={filteredRows} onOpen={openEscrow} />
+        ) : (
+          <div className="card py-12 text-center">
+            <p className="text-sm font-semibold">
+              Opening escrow timeline…
+            </p>
+          </div>
+        )
+      ) : (
+        /* Ledger Cards View with PNG Image Receipt Download */
+        <div className="flex flex-col gap-3 w-full">
         {filteredRows.length === 0 ? (
           <div className="card py-12 text-center">
             <p className="text-sm font-semibold">No transactions match your query.</p>
@@ -617,7 +682,11 @@ export default function DashboardPage() {
           filteredRows.map((r) => {
             const TagIcon = tagIcon(r.tag || "GENERAL");
             return (
-              <div key={r.id} className="card flex flex-col gap-3 w-full">
+              <div
+                key={r.id}
+                id={`escrow-${r.id}`}
+                className="card flex flex-col gap-3 w-full"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-mono text-sm font-extrabold text-foreground">{r.id}</p>
@@ -685,7 +754,8 @@ export default function DashboardPage() {
             );
           })
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

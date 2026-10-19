@@ -1,0 +1,80 @@
+name: Web CI + image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-ci-image.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web-ci-image.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  verify:
+    name: Typecheck and unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  image:
+    name: Build and publish runtime image
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
+          file: web/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/an-nita-llc/ezri-web:latest
+            ghcr.io/an-nita-llc/ezri-web:sha-${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'https://ezri-api.onrender.com' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Optional: add the Render deploy hook as a repository secret to make
+      # Render pull the fresh image automatically. Without it, trigger a
+      # manual deploy in the Render dashboard after CI turns green.
+      - name: Trigger Render deploy
+        if: env.RENDER_DEPLOY_HOOK_URL != ''
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"

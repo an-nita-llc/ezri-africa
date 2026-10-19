@@ -2,6 +2,7 @@ services:
   - type: web
     name: ezri-api
     runtime: python
+    plan: free
     buildCommand: "pip install -r api/requirements.txt"
     startCommand: "uvicorn server:app --app-dir api --host 0.0.0.0 --port $PORT"
     healthCheckPath: /api/health
@@ -28,9 +29,10 @@ services:
         sync: false
   - type: web
     name: ezri-web
-    runtime: node
-    buildCommand: "cd web && pnpm install --frozen-lockfile && pnpm run build"
-    startCommand: "cd web && ./node_modules/.bin/next start -p $PORT"
-    envVars:
-      - key: NODE_VERSION
-        value: 22
+    runtime: image
+    plan: free
+    # Built and published by .github/workflows/web-ci-image.yml.
+    # Builds run on GitHub's 16 GB runners, so Render never compiles the app.
+    image:
+      url: ghcr.io/an-nita-llc/ezri-web:latest
+    healthCheckPath: /
