@@ -57,9 +57,9 @@ Apply `render.yaml` as a Blueprint, or create them manually:
 - Health check path: `/api/health`
 - Environment: `DATABASE_URL`, PayPal, Upstash, and Cloudflare R2 values from
   `.env.example` (set them in the dashboard only — never in git)
-- `CORS_ALLOWED_ORIGINS`: your web URL(s), comma-separated. The current
-  Git-backed deployment is `https://ezri-africa.onrender.com`; if you create
-  the image service as `ezri-web`, add `https://ezri-web.onrender.com` too.
+- `CORS_ALLOWED_ORIGINS`: `https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com`
+  (comma-separated, no spaces). The `onrender.com` origin is handy while
+  testing; remove it once the custom domain is live.
 
 ### 4. Point the web build at the API
 
@@ -79,6 +79,39 @@ Render → `ezri-web` → **Settings → Deploy Hook** → copy the URL. Add it 
 GitHub as the repository secret `RENDER_DEPLOY_HOOK_URL`. The workflow then
 triggers Render after every successful image push. Without it, click
 **Manual Deploy → Deploy latest commit** in Render after CI is green.
+
+## Custom domain: ezri-africa.com
+
+The domain's DNS is managed by **Cloudflare**. Today the apex and `www` point
+at a different Vercel site (the career platform). Moving them to Render takes
+that site offline.
+
+**Safe order:** if you want to keep the career site, first add
+`careers.ezri-africa.com` to the Vercel project, create the matching Cloudflare
+CNAME, and confirm it loads. Only then move the main records.
+
+1. Render → the production web service (currently `ezri-africa`) →
+   **Settings → Custom Domains** → add:
+   - `ezri-africa.com`
+   - `www.ezri-africa.com`
+2. In Cloudflare DNS, replace the current Vercel records:
+   - Delete the apex `A` records (currently `64.29.17.1`, `216.198.79.1`).
+   - Delete the `www` CNAME (currently `b231e7ad6bfbe744.vercel-dns-017.com`).
+   - Add `www` **CNAME** → the target Render shows
+     (normally `ezri-africa.onrender.com`).
+   - Add apex `@` **CNAME** → the same Render target, using Cloudflare's
+     automatic CNAME flattening. If you prefer an `A` record, use the IP
+     Render displays in the custom-domain panel.
+   - Keep both records **DNS only (grey cloud)** until Render has issued the
+     TLS certificate. You can enable the Cloudflare proxy afterwards.
+3. Wait for Render to show the domain as **Verified** with an active
+   certificate.
+4. Set the API's `CORS_ALLOWED_ORIGINS` to
+   `https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com`.
+5. Set `NEXT_PUBLIC_API_URL` to the API's URL and redeploy the web service.
+
+The `https://ezri-africa.onrender.com` URL keeps working after the domain is
+attached, so it remains a safe fallback for the demo.
 
 ## Local rules
 
