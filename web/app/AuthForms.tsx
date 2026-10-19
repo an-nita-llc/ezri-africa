@@ -35,7 +35,19 @@ function useRedirectIfAuthed() {
   }, [router]);
 }
 
-async function post(path: string, body?: object): Promise<{ ok: boolean; detail?: string; token?: string; user?: { email: string; name: string } }> {
+async function post(
+  path: string,
+  body?: object,
+): Promise<{
+  ok: boolean;
+  detail?: string;
+  token?: string;
+  user?: { email: string; name: string };
+  demo_token?: string | null;
+  reset_url?: string | null;
+  expires_in_minutes?: number;
+  delivered?: boolean;
+}> {
   const r = await fetch(`${API}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -722,13 +734,26 @@ export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [demoToken, setDemoToken] = useState<string | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError(null);
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
     setPending(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setPending(false);
-    setSubmitted(true);
+    try {
+      const j = await post("/api/auth/forgot", { email: email.trim() });
+      if (typeof j.demo_token === "string" && j.demo_token) setDemoToken(j.demo_token);
+      setSubmitted(true);
+    } catch {
+      setError("No connection to the API. Try again.");
+    } finally {
+      setPending(false);
+    }
   }
 
   if (submitted) {
@@ -741,12 +766,25 @@ export function ForgotPasswordForm() {
         <p className="max-w-sm text-sm leading-6 text-muted-foreground">
           If an account exists for <strong>{email}</strong>, a reset link is on its way.
         </p>
+        {demoToken ? (
+          <div className="w-full rounded-xl border border-brand-200 bg-brand-50/70 px-4 py-3 text-left text-xs leading-5 text-brand-800">
+            <p className="font-bold">Demo mode — no mailbox connected.</p>
+            <p>Use your secure, single-use reset link directly:</p>
+            <Link
+              href={`/reset-password?token=${encodeURIComponent(demoToken)}`}
+              className="mt-1.5 inline-block font-bold text-brand-700 underline"
+            >
+              Open reset link
+            </Link>
+          </div>
+        ) : null}
       </div>
     );
   }
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+      {error ? <ErrorAlert message={error} /> : null}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="text-sm font-medium">
           Email address
@@ -814,10 +852,25 @@ export function ResetPasswordForm() {
       return;
     }
     setPending(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setDone(true);
-    setPending(false);
-    setTimeout(() => router.push("/login"), 2000);
+    try {
+      const r = await fetch(`${API}/api/auth/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setError(j?.detail || "That reset link is invalid or expired. Request a new one.");
+        setPending(false);
+        return;
+      }
+      setDone(true);
+      setPending(false);
+      setTimeout(() => router.push("/login"), 2000);
+    } catch {
+      setError("No connection to the API. Try again.");
+      setPending(false);
+    }
   }
 
   if (done) {

@@ -30,7 +30,9 @@ import {
 } from "lucide-react";
 import { InfoRow, PageHeader, SectionCard, Toggle } from "@/components/ui/section-card";
 import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf } from "../fx";
-import { loadSession, saveSession, type Session } from "../session";
+import { authHeaders, loadSession, saveSession, type Session } from "../session";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 const SPEECH_KEY = "ezri:speech_enabled";
 const PROFILE_KEY = "ezri:user_profile";
@@ -107,6 +109,17 @@ const APPROVAL_DEFAULTS: ApprovalPrefs = {
 
 const PREFS_KEY = "ezri:prefs";
 
+/** Full payload persisted server-side (`/api/prefs`) + mirrored to localStorage offline. */
+type PurposeLockPayload = ApprovalPrefs & {
+  active_tag: string;
+  strict_proof: boolean;
+  require_photo: boolean;
+  auto_refund: boolean;
+  speech_enabled: boolean;
+  expiry_minutes: number;
+  profile: { name: string; phone: string; avatar: string | null };
+};
+
 export default function PurposeLockPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -128,10 +141,34 @@ export default function PurposeLockPage() {
   const [approval, setApproval] = useState<ApprovalPrefs>(APPROVAL_DEFAULTS);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    void loadSession().then((s) => {
+
+    function applyPayload(p: Partial<PurposeLockPayload>) {
+      setApproval({
+        requireApproval:
+          typeof p.requireApproval === "boolean" ? p.requireApproval : APPROVAL_DEFAULTS.requireApproval,
+        requirePin: typeof p.requirePin === "boolean" ? p.requirePin : APPROVAL_DEFAULTS.requirePin,
+        refundApproval:
+          typeof p.refundApproval === "boolean" ? p.refundApproval : APPROVAL_DEFAULTS.refundApproval,
+      });
+      if (typeof p.active_tag === "string") setActiveTag(p.active_tag);
+      if (typeof p.strict_proof === "boolean") setStrictProof(p.strict_proof);
+      if (typeof p.require_photo === "boolean") setRequirePhoto(p.require_photo);
+      if (typeof p.auto_refund === "boolean") setAutoRefund(p.auto_refund);
+      if (typeof p.speech_enabled === "boolean") setSpeechEnabled(p.speech_enabled);
+      if (typeof p.expiry_minutes === "number") setExpiry(String(p.expiry_minutes));
+      if (p.profile) {
+        if (p.profile.avatar) setProfileAvatar(p.profile.avatar);
+        if (p.profile.phone) setProfilePhone(p.profile.phone);
+        if (p.profile.name) setProfileName(p.profile.name);
+      }
+    }
+
+    void (async () => {
+      const s = await loadSession().catch(() => null);
       if (!alive) return;
       if (!s) {
         router.replace("/login?next=/purpose-lock");
@@ -141,18 +178,32 @@ export default function PurposeLockPage() {
       setProfileName(s.name || "Demo Sender");
       setProfileEmail(s.email || "demo@ezri-africa.com");
 
+      // Server copy wins; localStorage is the offline fallback.
+      let server: Partial<PurposeLockPayload> | null = null;
       try {
-        const stored = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<ApprovalPrefs>;
-        setApproval({ ...APPROVAL_DEFAULTS, ...stored });
-        const spStored = localStorage.getItem(SPEECH_KEY);
-        if (spStored === "true") setSpeechEnabled(true);
+        const r = await fetch(`${API}/api/prefs`, { headers: authHeaders(s.token) });
+        if (r.ok) {
+          const j = await r.json();
+          if (j?.prefs && typeof j.prefs === "object") server = j.prefs as Partial<PurposeLockPayload>;
+        }
+      } catch {}
+      if (!alive) return;
 
-        const profStored = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
-        if (profStored.avatar) setProfileAvatar(profStored.avatar);
-        if (profStored.phone) setProfilePhone(profStored.phone);
+      try {
+        if (server) {
+          applyPayload(server);
+        } else {
+          const stored = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<ApprovalPrefs>;
+          setApproval({ ...APPROVAL_DEFAULTS, ...stored });
+          const spStored = localStorage.getItem(SPEECH_KEY);
+          if (spStored === "true") setSpeechEnabled(true);
+          const profStored = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
+          if (profStored.avatar) setProfileAvatar(profStored.avatar);
+          if (profStored.phone) setProfilePhone(profStored.phone);
+        }
       } catch {}
       setLoading(false);
-    });
+    })();
     return () => {
       alive = false;
     };
@@ -188,38 +239,59 @@ export default function PurposeLockPage() {
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
+    const payload: PurposeLockPayload = {
+      active_tag: activeTag,
+      strict_proof: strictProof,
+      require_photo: requirePhoto,
+      auto_refund: autoRefund,
+      speech_enabled: speechEnabled,
+      expiry_minutes: Number(expiry),
+      ...approval,
+      profile: { name: profileName, phone: profilePhone, avatar: profileAvatar },
+    };
+
+    // Offline mirror first: the device keeps the latest copy even if the API is unreachable.
     try {
-      localStorage.setItem(
-        "ezri:purpose-lock",
-        JSON.stringify({
-          active_tag: activeTag,
-          strict_proof: strictProof,
-          require_photo: requirePhoto,
-          auto_refund: autoRefund,
-          speech_enabled: speechEnabled,
-          expiry_minutes: Number(expiry),
-          ...approval,
-        }),
-      );
+      localStorage.setItem("ezri:purpose-lock", JSON.stringify(payload));
       localStorage.setItem(SPEECH_KEY, String(speechEnabled));
-
-      const updatedProfile = {
-        name: profileName,
-        email: profileEmail,
-        phone: profilePhone,
-        avatar: profileAvatar,
-      };
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(updatedProfile));
-
-      if (session) {
-        await saveSession({
-          ...session,
-          name: profileName,
-          email: profileEmail,
-        });
-      }
+      const storedPrefs = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...storedPrefs, ...approval }));
+      localStorage.setItem(
+        PROFILE_KEY,
+        JSON.stringify({ name: profileName, email: profileEmail, phone: profilePhone, avatar: profileAvatar }),
+      );
     } catch {}
-    await new Promise((r) => setTimeout(r, 400));
+
+    if (session) {
+      try {
+        const headers = authHeaders(session.token);
+        const [profileRes, prefsRes] = await Promise.all([
+          fetch(`${API}/api/profile`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ name: profileName, phone: profilePhone }),
+          }),
+          fetch(`${API}/api/prefs`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ payload }),
+          }),
+        ]);
+        if (!profileRes.ok || !prefsRes.ok) {
+          const failing = !profileRes.ok ? profileRes : prefsRes;
+          const j = await failing.json().catch(() => ({}));
+          throw new Error(j?.detail || "Could not save to your account.");
+        }
+        await saveSession({ ...session, name: profileName, email: profileEmail });
+      } catch (err) {
+        setSaveError(
+          err instanceof Error && err.message
+            ? `${err.message} Saved on this device only.`
+            : "Could not reach the API — saved on this device only.",
+        );
+      }
+    }
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -296,7 +368,8 @@ export default function PurposeLockPage() {
                 id="pemail"
                 type="email"
                 value={profileEmail}
-                onChange={(e) => setProfileEmail(e.target.value)}
+                readOnly
+                title="Your sign-in email is locked to this account."
                 className="input text-sm font-semibold"
                 placeholder="you@example.com"
               />
@@ -437,7 +510,15 @@ export default function PurposeLockPage() {
       </SectionCard>
 
       {/* Save Settings Action Button */}
-      <div className="flex justify-end border-t border-border pt-4">
+      <div className="flex flex-col items-stretch gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {saveError ? (
+          <p role="alert" className="flex items-center gap-2 text-xs font-semibold text-danger">
+            <AlertTriangle aria-hidden="true" className="size-4 shrink-0" />
+            {saveError}
+          </p>
+        ) : (
+          <span />
+        )}
         <button
           type="button"
           onClick={() => void handleSave()}

@@ -8,7 +8,10 @@ Events:
   transfer.created | transfer.held | transfer.released | transfer.refunded
   transfer.overridden | transfer.expired
   proof.passed | proof.failed
+  auth.otp_requested | auth.reset_requested
 
+Every event is also recorded in the ledger `events` table (local audit trail,
+shown in Settings), so the automation story stays visible with zero config.
 Delivery is best-effort and never breaks money movement: short timeout,
 all errors swallowed, sent via FastAPI BackgroundTasks (after the response).
 """
@@ -64,6 +67,17 @@ def post_event(event: str, payload: dict) -> bool:
         return False
 
 
+def _record(event: str, payload: dict) -> None:
+    """Local audit trail: every event lands in the ledger `events` table so the
+    app can show live automation activity even when no webhook is configured."""
+    try:
+        from ledger import add_event
+
+        add_event(event, payload)
+    except Exception:
+        pass
+
+
 def emit(
     background: BackgroundTasks | None,
     event: str,
@@ -73,6 +87,29 @@ def emit(
     """Schedule (or directly send) an event for an escrow row. Never raises."""
     try:
         payload = build_event(row, extra)
+        _record(event, payload)
+        if background is None:
+            post_event(event, payload)
+        else:
+            background.add_task(post_event, event, payload)
+    except Exception:
+        pass
+
+
+def emit_raw(
+    background: BackgroundTasks | None,
+    event: str,
+    payload: dict,
+    record_payload: dict | None = None,
+) -> None:
+    """Emit a non-escrow event (auth.otp_requested, auth.reset_requested, ...).
+
+    `record_payload` (when given) is what lands in the public event log; the
+    full `payload` is only what the configured webhook receives, so secrets
+    like OTP codes and reset tokens never leak through /api/events.
+    """
+    try:
+        _record(event, record_payload if record_payload is not None else payload)
         if background is None:
             post_event(event, payload)
         else:

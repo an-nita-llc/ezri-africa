@@ -64,6 +64,14 @@ Apply `render.yaml` as a Blueprint, or create them manually:
   Set `DATABASE_URL` (Prisma Postgres) only if you want data to survive
   restarts and redeploys. PayPal/Upstash/R2/OpenRouter values come from
   `.env.example` — dashboard only, never in git.
+- Optional delivery/config variables on `ezri-api`:
+  - `NOTIFY_WEBHOOK_URL` — a Zapier **Catch Hook** (or Make/webhook.site).
+    Every lifecycle event POSTs there as JSON, and the auth events carry the
+    sign-in code (`auth.otp_requested`) / reset link (`auth.reset_requested`)
+    so Zapier can deliver real email or SMS with no mail server. Unset: the
+    app stays fully usable — the code and demo reset link are shown on screen.
+  - `WEB_BASE_URL` — origin used in reset links handed to the webhook.
+    Defaults to `https://ezri-africa.com`.
 
 ### 4. Point the web build at the API
 

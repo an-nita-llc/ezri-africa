@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertCircle,
   Check,
   Copy,
   CreditCard,
@@ -35,11 +36,10 @@ type VirtualCard = {
   balance: number;
   frozen: boolean;
   type: "Visa" | "Mastercard";
-  colorBg: string;
 };
 
-// INITIAL CARDS IS EMPTY: No cards display until user chooses to create one!
-const INITIAL_CARDS: VirtualCard[] = [];
+// Deterministic card face by vault position (pure UI styling).
+const CARD_FACES = ["bg-[#003868]", "bg-brand-700", "bg-annita-navy-900"];
 
 const MOCK_CARD_TXNS = [
   { id: "TXN-9021", merchant: "Monrovia Consolidated High School", category: "Tuition", amount: 120.0, date: "Today, 10:14 AM", status: "Settled" },
@@ -52,10 +52,12 @@ export default function VirtualCardPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [cards, setCards] = useState<VirtualCard[]>(INITIAL_CARDS);
+  const [cards, setCards] = useState<VirtualCard[]>([]);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [showDetailsId, setShowDetailsId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   // Modals
   const [createModal, setCreateModal] = useState(false);
@@ -70,20 +72,25 @@ export default function VirtualCardPage() {
 
   useEffect(() => {
     let alive = true;
-    try {
-      void loadSession().then((s) => {
+    void (async () => {
+      const s = await loadSession().catch(() => null);
+      if (!alive) return;
+      if (!s) {
+        router.replace("/login?next=/virtual-card");
+        return;
+      }
+      setSession(s);
+      try {
+        const r = await fetch(`${API}/api/cards`, { headers: authHeaders(s.token) });
+        const j = await r.json();
         if (!alive) return;
-        if (!s) {
-          router.replace("/login?next=/virtual-card");
-          return;
-        }
-        setSession(s);
-        setLoading(false);
-      });
-    } catch {
-      setSession({ token: "demo-token", email: "demo@ezri-africa.com", name: "Demo Sender" });
-      setLoading(false);
-    }
+        if (!r.ok) throw new Error("load failed");
+        setCards(Array.isArray(j.cards) ? j.cards : []);
+      } catch {
+        if (alive) setError("Could not reach your card vault. Check your connection and refresh.");
+      }
+      if (alive) setLoading(false);
+    })();
     return () => {
       alive = false;
     };
@@ -91,47 +98,79 @@ export default function VirtualCardPage() {
 
   const activeCard = cards.find((c) => c.id === activeCardId) || cards[0] || null;
 
-  function handleCreateCard(e: React.FormEvent) {
+  async function handleCreateCard(e: React.FormEvent) {
     e.preventDefault();
-    if (cards.length >= 3) return;
-
-    const newId = `CARD-${Math.floor(100 + Math.random() * 900)}`;
-    const randDigits = Math.floor(1000 + Math.random() * 9000);
-    const newCard: VirtualCard = {
-      id: newId,
-      name: newCardName.trim() || "Virtual Remittance Card",
-      number: `${newCardType === "Visa" ? "4242" : "5520"}  ${Math.floor(1000 + Math.random() * 9000)}  ${Math.floor(1000 + Math.random() * 9000)}  ${randDigits}`,
-      expiry: "11/29",
-      cvv: String(Math.floor(100 + Math.random() * 900)),
-      balance: 100.0,
-      frozen: false,
-      type: newCardType,
-      colorBg: cards.length === 1 ? "bg-brand-700" : cards.length === 2 ? "bg-annita-navy-900" : "bg-[#003868]",
-    };
-
-    setCards([...cards, newCard]);
-    setActiveCardId(newId);
-    setNewCardName("");
-    setCreateModal(false);
-  }
-
-  function handleDeleteCard() {
-    if (!cardToDelete) return;
-    const remaining = cards.filter((c) => c.id !== cardToDelete.id);
-    setCards(remaining);
-    if (remaining.length > 0) {
-      setActiveCardId(remaining[0].id);
-    } else {
-      setActiveCardId(null);
+    if (cards.length >= 3 || !session || busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/cards/create`, {
+        method: "POST",
+        headers: authHeaders(session.token),
+        body: JSON.stringify({
+          name: newCardName.trim() || "Virtual Remittance Card",
+          brand: newCardType,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.detail || "Could not issue the card.");
+      setCards((prev) => [...prev, j.card]);
+      setActiveCardId(j.card.id);
+      setNewCardName("");
+      setCreateModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not issue the card.");
+    } finally {
+      setBusy(false);
     }
-    setDeleteModal(false);
-    setCardToDelete(null);
   }
 
-  function toggleFreeze(id: string) {
-    setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, frozen: !c.frozen } : c))
-    );
+  async function handleDeleteCard() {
+    if (!cardToDelete || !session || busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/cards/delete`, {
+        method: "POST",
+        headers: authHeaders(session.token),
+        body: JSON.stringify({ card_id: cardToDelete.id }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j?.detail || "Could not delete the card.");
+      }
+      const remaining = cards.filter((c) => c.id !== cardToDelete.id);
+      setCards(remaining);
+      setActiveCardId(remaining[0]?.id ?? null);
+      setDeleteModal(false);
+      setCardToDelete(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete the card.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleFreeze(id: string) {
+    if (!session) return;
+    const target = cards.find((c) => c.id === id);
+    if (!target) return;
+    setError(null);
+    // Optimistic flip, reconciled with the server response.
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, frozen: !c.frozen } : c)));
+    try {
+      const r = await fetch(`${API}/api/cards/freeze`, {
+        method: "POST",
+        headers: authHeaders(session.token),
+        body: JSON.stringify({ card_id: id, frozen: !target.frozen }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.detail || "Could not update the card.");
+      setCards((prev) => prev.map((c) => (c.id === id ? j.card : c)));
+    } catch {
+      setCards((prev) => prev.map((c) => (c.id === id ? { ...c, frozen: target.frozen } : c)));
+      setError("Could not update the card. Try again.");
+    }
   }
 
   function copyCardNumber(card: VirtualCard) {
@@ -142,14 +181,27 @@ export default function VirtualCardPage() {
     });
   }
 
-  function handleTopUp(e: React.FormEvent) {
+  async function handleTopUp(e: React.FormEvent) {
     e.preventDefault();
+    if (!session || !activeCard || busy) return;
     const val = parseFloat(topUpAmount) || 0;
-    if (val > 0 && activeCard) {
-      setCards((prev) =>
-        prev.map((c) => (c.id === activeCard.id ? { ...c, balance: c.balance + val } : c))
-      );
+    if (val <= 0) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/cards/topup`, {
+        method: "POST",
+        headers: authHeaders(session.token),
+        body: JSON.stringify({ card_id: activeCard.id, amount: val }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.detail || "Could not load funds.");
+      setCards((prev) => prev.map((c) => (c.id === activeCard.id ? j.card : c)));
       setTopUpModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load funds.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -208,6 +260,16 @@ export default function VirtualCardPage() {
         </div>
       </div>
 
+      {error ? (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+        >
+          <AlertCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+
       {/* NO CARDS EMPTY STATE WHEN CARDS ARRAY IS EMPTY */}
       {cards.length === 0 ? (
         <div className="card flex flex-col items-center justify-center p-12 text-center gap-4 bg-surface border-2 border-dashed border-border rounded-3xl w-full">
@@ -242,9 +304,10 @@ export default function VirtualCardPage() {
 
             {/* Cards Grid - Spreads Wide on Desktop */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {cards.map((card) => {
+              {cards.map((card, idx) => {
                 const isSelected = activeCardId === card.id;
                 const isShowingDetails = showDetailsId === card.id;
+                const face = CARD_FACES[idx % CARD_FACES.length];
 
                 return (
                   <div
@@ -259,7 +322,7 @@ export default function VirtualCardPage() {
                       className={`relative overflow-hidden rounded-3xl p-6 text-white shadow-xl transition-all duration-500 transform-gpu group-hover:-translate-y-1 group-hover:shadow-2xl border-2 ${
                         card.frozen
                           ? "bg-[#1e293b] border-slate-700 opacity-85"
-                          : `${card.colorBg} border-white/20`
+                          : `${face} border-white/20`
                       } ${isSelected ? "ring-4 ring-brand-500/30" : ""}`}
                     >
                       {/* Animated Shimmer Overlay */}
@@ -529,7 +592,7 @@ export default function VirtualCardPage() {
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary btn-lg font-bold gap-2">
+              <button type="submit" className="btn btn-primary btn-lg font-bold gap-2" disabled={busy}>
                 <Plus className="size-4" /> Issue Virtual Card
               </button>
             </form>
@@ -556,6 +619,7 @@ export default function VirtualCardPage() {
               type="button"
               onClick={handleDeleteCard}
               className="btn btn-danger btn-block sm:w-auto"
+              disabled={busy}
             >
               Delete Card
             </button>
@@ -592,7 +656,7 @@ export default function VirtualCardPage() {
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary btn-lg font-bold">
+              <button type="submit" className="btn btn-primary btn-lg font-bold" disabled={busy}>
                 Confirm Load
               </button>
             </form>

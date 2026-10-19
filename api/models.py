@@ -64,3 +64,62 @@ class ProveOut(BaseModel):
     reason: str
     provider: Optional[Provider] = None
     mock_momo_txn_id: Optional[str] = None
+
+
+# ---- Auth extensions: email OTP + password reset ----
+
+class OtpRequestIn(BaseModel):
+    email: str = ""
+
+
+class OtpVerifyIn(BaseModel):
+    email: str = ""
+    code: str = ""
+
+
+class ForgotIn(BaseModel):
+    email: str = ""
+
+
+class ResetIn(BaseModel):
+    token: str = ""
+    password: str = ""
+
+
+# ---- Sender profile ----
+
+class ProfileIn(BaseModel):
+    name: str = ""
+    phone: str = ""
+    country: str = ""
+    provider: str = ""
+    region_type: str = ""
+    dob: str = ""
+    location: str = ""
+
+
+# ---- Virtual card vault ----
+
+class CardCreateIn(BaseModel):
+    name: str = "Virtual Remittance Card"
+    brand: str = "Visa"
+
+
+class CardFreezeIn(BaseModel):
+    card_id: str = ""
+    frozen: bool = True
+
+
+class CardTopupIn(BaseModel):
+    card_id: str = ""
+    amount: float = Field(gt=0, le=1000)
+
+
+class CardDeleteIn(BaseModel):
+    card_id: str = ""
+
+
+# ---- Purpose-lock preferences ----
+
+class PrefsIn(BaseModel):
+    payload: dict = Field(default_factory=dict)

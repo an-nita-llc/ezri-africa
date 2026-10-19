@@ -97,9 +97,15 @@ sequenceDiagram
 
 ### 1. Gateway & Auth Endpoints (`:8000`)
 - `GET /api/health` — Returns multi-service health status (`ai_service_online`, `db_service_online`, `fee_pct`, `fx_lrd`).
-- `POST /api/auth/signup` — Registers user with name, email, and PBKDF2 hashed password.
+- `POST /api/auth/signup` — Registers user with name, email, profile fields (phone, country, provider, region, DOB, location) and PBKDF2 hashed password.
+- `POST /api/auth/login` — Password sign-in.
 - `POST /api/auth/demo` — Issues a judge demo token without rejecting credentials.
-- `GET /api/auth/me` — Fetches active user session identity.
+- `POST /api/auth/otp/request` — Sends a 6-digit sign-in code to the email. Demo mode returns the code on screen; Zapier/webhook delivery when configured.
+- `POST /api/auth/otp/verify` — Verifies the code and opens a sender session (creates the account on first use).
+- `POST /api/auth/forgot` — Creates a single-use password reset link without revealing whether the account exists.
+- `POST /api/auth/reset` — Completes the reset with a valid one-time token.
+- `GET /api/auth/me` — Fetches active user session identity plus the saved profile.
+- `GET /api/profile` / `POST /api/profile` — Reads and updates sender profile fields.
 
 ### 2. AI Copilot & Vision Endpoints (`:8001`)
 - `POST /api/chat/parse` — Parses prompt text via OpenRouter DeepSeek V4.
@@ -112,6 +118,11 @@ sequenceDiagram
 - `POST /api/escrow/refund` — Calls PayPal Payments Refunds API to return `amount + fee`.
 - `GET /api/escrow/{id}` — Fetches escrow session state for receiver claim page.
 - `GET /api/dashboard` — Lists financial ledger transactions with natural language query filtering.
+
+### 4. Vault, Preferences & Automation (`:8002`, persisted per sender)
+- `GET /api/cards` · `POST /api/cards/create` · `POST /api/cards/freeze` · `POST /api/cards/topup` · `POST /api/cards/delete` — Virtual card vault (max 3 per sender; deterministic mock Visa/Mastercard numbers, balances and freeze state survive redeploys with `DATABASE_URL`).
+- `GET /api/prefs` · `POST /api/prefs` — Purpose-lock configuration saved server-side; localStorage stays the offline fallback.
+- `GET /api/events` — Last 25 lifecycle events plus whether `NOTIFY_WEBHOOK_URL` is configured (rendered in Settings → Automation & webhooks).
 
 ---
 

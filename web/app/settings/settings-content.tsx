@@ -18,11 +18,13 @@ import {
   Moon,
   Palette,
   Percent,
+  RotateCw,
   ShieldCheck,
   Sparkles,
   Sun,
   Type,
   UserRound,
+  Zap,
 } from "lucide-react";
 import { InfoRow, PageHeader, SectionCard, Toggle } from "@/components/ui/section-card";
 import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf } from "../fx";
@@ -44,6 +46,8 @@ const PROVIDERS = [
   "MTN MoMo",
   "M-Pesa",
 ];
+
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 
 const PAYOUT_COUNTRIES = [
   "Liberia",
@@ -337,6 +341,9 @@ export function SettingsContent() {
         />
       </SectionCard>
 
+      {/* Automation & webhooks — live event log straight from the API */}
+      <AutomationLog />
+
       {/* Demo environment */}
       <SectionCard title="Demo environment" icon={FlaskConical} badge="Hackathon">
         <div className="flex flex-col gap-2 text-xs">
@@ -413,4 +420,95 @@ function Segmented<T extends string>({
       })}
     </div>
   );
+}
+
+/** Live automation feed: recent API events + whether the notify webhook is wired. */
+function AutomationLog() {
+  const [events, setEvents] = useState<
+    Array<{ id: number; event: string; payload: Record<string, unknown>; created_at: number }>
+  >([]);
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/events`);
+      const j = await r.json();
+      setEvents(Array.isArray(j.events) ? j.events : []);
+      setConnected(Boolean(j.notify_webhook));
+    } catch {
+      /* Offline — keep the last snapshot. */
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  return (
+    <SectionCard
+      title="Automation &amp; webhooks"
+      icon={Zap}
+      badge={connected ? "Webhook connected" : "Demo mode"}
+    >
+      <p className="text-xs leading-5 text-muted-foreground">
+        Every lifecycle event is logged here the moment it happens. Set NOTIFY_WEBHOOK_URL on the
+        API (a Zapier Catch Hook, Make, or webhook.site) and the exact same events POST there for
+        SMS or email alerts — no code changes.
+      </p>
+      <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs">
+        <span className="font-bold text-foreground">Event webhook (Zapier)</span>
+        <span
+          className={`rounded-full border px-2.5 py-0.5 font-extrabold ${
+            connected
+              ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+              : "border-amber-300 bg-amber-100 text-amber-800"
+          }`}
+        >
+          {connected ? "Connected" : "Not configured"}
+        </span>
+      </div>
+      <div className="flex flex-col gap-2">
+        {loading && events.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Loading recent events…</p>
+        ) : events.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No events yet — create a transfer to see live automation activity.
+          </p>
+        ) : (
+          events.slice(0, 6).map((e) => (
+            <div
+              key={e.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 py-2 text-xs"
+            >
+              <span className="shrink-0 font-mono font-bold text-foreground">{e.event}</span>
+              <span className="min-w-0 flex-1 truncate text-center text-muted-foreground">
+                {String(e.payload.escrow_id ?? e.payload.email ?? "")}
+              </span>
+              <span className="shrink-0 text-muted-foreground">{timeAgo(e.created_at)}</span>
+            </div>
+          ))
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => void load()}
+        disabled={loading}
+        className="btn btn-secondary btn-sm gap-2 self-start"
+      >
+        <RotateCw aria-hidden="true" className={loading ? "size-3.5 animate-spin" : "size-3.5"} />
+        Refresh
+      </button>
+    </SectionCard>
+  );
+}
+
+function timeAgo(ts: number): string {
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }

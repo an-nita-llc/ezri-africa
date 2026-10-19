@@ -1,6 +1,8 @@
 """Ezri Africa API — single entry like ai-service/server.py. Vertical slice only."""
 from __future__ import annotations
+import json
 import os
+import secrets
 import time
 import uuid
 
@@ -9,15 +11,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ai_guard import FEE_PCT, fee_of, parse_intent, strict_proof_check
-from notify import emit, webhook_url
+from notify import emit, emit_raw, webhook_url
 from ledger import (
-    create_escrow, create_session, create_user, find_by_capture,
-    get_escrow, get_session_email, get_user, list_escrows, update_escrow, verify_user,
+    create_card, create_escrow, create_session, create_user, delete_card, delete_otp,
+    find_by_capture, get_card, get_escrow, get_otp, get_prefs, get_reset, get_session_email,
+    get_user, list_cards, list_escrows, list_events, save_otp, save_prefs, save_reset,
+    set_password, update_card, update_escrow, update_user_profile, use_reset, verify_user,
 )
-from models import CaptureIn, EscrowCreateIn, OverrideIn, ParseIn, RefundIn
+from models import (
+    CaptureIn, CardCreateIn, CardDeleteIn, CardFreezeIn, CardTopupIn, EscrowCreateIn,
+    ForgotIn, OtpRequestIn, OtpVerifyIn, OverrideIn, ParseIn, PrefsIn, ProfileIn, RefundIn,
+    ResetIn,
+)
 from paypal_client import MOCK, capture_order, create_order, refund_capture
 
 EXPIRY_MIN = int(os.environ.get("DEMO_EXPIRY_MINUTES", "10"))
+OTP_TTL_MIN = 5      # sign-in codes expire quickly
+RESET_TTL_MIN = 30   # password reset links
+# Canonical site used when building reset links for webhook delivery (Zapier → email).
+WEB_BASE_URL = os.environ.get("WEB_BASE_URL", "https://ezri-africa.com").rstrip("/")
 
 # CORS allowlist (demo): explicit origins only — never "*" with credentials.
 # Override with CORS_ALLOWED_ORIGINS in production (Render sets it).
@@ -66,6 +78,13 @@ class SignupIn(BaseModel):
     name: str = "John"
     email: str = ""
     password: str = ""
+    # Optional profile fields captured by the signup wizard (persisted on the user).
+    phone: str = ""
+    country: str = ""
+    provider: str = ""
+    region_type: str = ""
+    dob: str = ""
+    location: str = ""
 
 
 class LoginIn(BaseModel):
@@ -88,9 +107,28 @@ def _sender(request: Request) -> str:
     return ""
 
 
+def _require_sender(request: Request) -> str:
+    email = _sender(request)
+    if not email:
+        raise HTTPException(401, "Not logged in.")
+    return email
+
+
 @app.post("/api/auth/signup")
 def auth_signup(body: SignupIn) -> dict:
-    user = create_user(body.name, body.email, body.password)
+    user = create_user(
+        body.name,
+        body.email,
+        body.password,
+        {
+            "phone": body.phone,
+            "country": body.country,
+            "provider": body.provider,
+            "region_type": body.region_type,
+            "dob": body.dob,
+            "location": body.location,
+        },
+    )
     if not user:
         raise HTTPException(400, "Email taken or password too short (min 4).")
     return {"token": create_session(user["email"]), "user": user}
@@ -147,7 +185,100 @@ def auth_me(request: Request) -> dict:
     email = _sender(request)
     if not email:
         raise HTTPException(401, "Not logged in.")
-    return {"email": email}
+    return get_user(email) or {"email": email}
+
+
+@app.post("/api/auth/otp/request")
+def auth_otp_request(body: OtpRequestIn, background: BackgroundTasks) -> dict:
+    """Send a 6-digit sign-in code to the email.
+
+    Demo mode returns the code in the response so judges need no mailbox;
+    set NOTIFY_WEBHOOK_URL (e.g. Zapier Catch Hook → Email/SMS) and the same
+    `auth.otp_requested` event delivers the real code with zero extra config.
+    """
+    email = body.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(400, "A valid email address is required.")
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    save_otp(email, code, OTP_TTL_MIN)
+    emit_raw(
+        background,
+        "auth.otp_requested",
+        {"email": email, "code": code, "expires_in_minutes": OTP_TTL_MIN},
+        {"email": email, "expires_in_minutes": OTP_TTL_MIN, "delivery": "webhook" if webhook_url() else "demo"},
+    )
+    return {
+        "ok": True,
+        "demo_code": code,
+        "expires_in_minutes": OTP_TTL_MIN,
+        "delivered": bool(webhook_url()),
+    }
+
+
+@app.post("/api/auth/otp/verify")
+def auth_otp_verify(body: OtpVerifyIn) -> dict:
+    """Verify the 6-digit code and open a sender session (creates the account on first use)."""
+    email = body.email.strip().lower()
+    code = body.code.strip()
+    row = get_otp(email)
+    if not row or row["code"] != code or time.time() > float(row["expires_at"]):
+        raise HTTPException(401, "That code didn't match or it expired. Request a new one.")
+    delete_otp(email)
+    user = get_user(email)
+    if not user:
+        user = create_user(_name_from_email(email), email, "otp-" + secrets.token_hex(8))
+    if not user:
+        raise HTTPException(400, "Could not open a session for that email.")
+    return {"token": create_session(user["email"]), "user": user}
+
+
+@app.post("/api/auth/forgot")
+def auth_forgot(body: ForgotIn, background: BackgroundTasks) -> dict:
+    """Create a one-time password reset link.
+
+    Never reveals whether the account exists. Demo mode returns the token so the
+    reset can be completed without a mailbox; `auth.reset_requested` carries the
+    full reset URL to the notify webhook (Zapier → email) when configured.
+    """
+    email = body.email.strip().lower()
+    user = get_user(email) if email else None
+    if not user:
+        return {
+            "ok": True,
+            "demo_token": None,
+            "reset_url": None,
+            "expires_in_minutes": RESET_TTL_MIN,
+        }
+    token = "ezr-reset-" + secrets.token_urlsafe(24)
+    save_reset(token, email, RESET_TTL_MIN)
+    reset_url = f"{WEB_BASE_URL}/reset-password?token={token}"
+    emit_raw(
+        background,
+        "auth.reset_requested",
+        {"email": email, "reset_url": reset_url, "expires_in_minutes": RESET_TTL_MIN},
+        {"email": email, "expires_in_minutes": RESET_TTL_MIN},
+    )
+    return {
+        "ok": True,
+        "demo_token": token,
+        "reset_url": reset_url,
+        "expires_in_minutes": RESET_TTL_MIN,
+    }
+
+
+@app.post("/api/auth/reset")
+def auth_reset(body: ResetIn) -> dict:
+    """Complete a password reset with a valid one-time token."""
+    if len(body.password) < 4:
+        raise HTTPException(400, "Use at least 4 characters for the new password.")
+    token = body.token.strip()
+    row = get_reset(token)
+    if not row or int(row.get("used") or 0) == 1 or time.time() > float(row["expires_at"]):
+        raise HTTPException(401, "That reset link is invalid or has expired. Request a new one.")
+    if not set_password(row["email"], body.password):
+        raise HTTPException(404, "Account not found.")
+    use_reset(token)
+    return {"ok": True, "email": row["email"]}
 
 
 @app.post("/api/chat/parse")
@@ -313,3 +444,98 @@ def dashboard(q: str = "") -> dict:
         else:
             rows = [r for r in rows if s in (r["note"] + r["recipient"] + r["tag"]).lower()]
     return {"count": len(rows), "rows": rows, "mock_paypal": MOCK}
+
+
+# ---- Sender profile (signup wizard fields + settings edits) ----
+
+@app.get("/api/profile")
+def profile_get(request: Request) -> dict:
+    email = _require_sender(request)
+    user = get_user(email)
+    if not user:
+        raise HTTPException(404, "Account not found.")
+    return user
+
+
+@app.post("/api/profile")
+def profile_update(body: ProfileIn, request: Request) -> dict:
+    email = _require_sender(request)
+    user = update_user_profile(
+        email,
+        name=body.name.strip()[:80] or None,
+        phone=body.phone.strip()[:40] or None,
+        country=body.country.strip()[:80] or None,
+        provider=body.provider.strip()[:120] or None,
+        region_type=body.region_type.strip()[:20] or None,
+        dob=body.dob.strip()[:20] or None,
+        location=body.location.strip()[:120] or None,
+    )
+    if not user:
+        raise HTTPException(404, "Account not found.")
+    return user
+
+
+# ---- Virtual card vault (mock numbers, real persistence) ----
+
+@app.get("/api/cards")
+def cards_list(request: Request) -> dict:
+    return {"cards": list_cards(_require_sender(request))}
+
+
+@app.post("/api/cards/create")
+def cards_create(body: CardCreateIn, request: Request) -> dict:
+    card = create_card(_require_sender(request), body.name, body.brand)
+    if not card:
+        raise HTTPException(400, "Card limit reached — up to 3 virtual cards per sender.")
+    return {"card": card}
+
+
+@app.post("/api/cards/freeze")
+def cards_freeze(body: CardFreezeIn, request: Request) -> dict:
+    email = _require_sender(request)
+    card = update_card(body.card_id, email, frozen=int(bool(body.frozen)))
+    if not card:
+        raise HTTPException(404, "Card not found.")
+    return {"card": card}
+
+
+@app.post("/api/cards/topup")
+def cards_topup(body: CardTopupIn, request: Request) -> dict:
+    email = _require_sender(request)
+    card = get_card(body.card_id, email)
+    if not card:
+        raise HTTPException(404, "Card not found.")
+    card = update_card(
+        body.card_id, email, balance=round(float(card["balance"]) + body.amount, 2)
+    )
+    return {"card": card}
+
+
+@app.post("/api/cards/delete")
+def cards_delete(body: CardDeleteIn, request: Request) -> dict:
+    if not delete_card(body.card_id, _require_sender(request)):
+        raise HTTPException(404, "Card not found.")
+    return {"ok": True}
+
+
+# ---- Purpose-lock preferences (per sender) ----
+
+@app.get("/api/prefs")
+def prefs_get(request: Request) -> dict:
+    return {"prefs": get_prefs(_require_sender(request))}
+
+
+@app.post("/api/prefs")
+def prefs_set(body: PrefsIn, request: Request) -> dict:
+    email = _require_sender(request)
+    if len(json.dumps(body.payload)) > 1_000_000:
+        raise HTTPException(413, "Preferences payload too large.")
+    save_prefs(email, body.payload)
+    return {"ok": True}
+
+
+# ---- Automation event log (what the notify webhook would deliver) ----
+
+@app.get("/api/events")
+def events() -> dict:
+    return {"events": list_events(25), "notify_webhook": bool(webhook_url())}

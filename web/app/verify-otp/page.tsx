@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, KeyRound, Loader2 } from "lucide-react";
@@ -22,6 +22,9 @@ function OtpVerifyForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [cooldown, setCooldown] = useState(30);
+  const [demoCode, setDemoCode] = useState<string | null>(null);
+  const [delivered, setDelivered] = useState(false);
+  const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -29,9 +32,39 @@ function OtpVerifyForm() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
+  const requestCode = useCallback(async () => {
+    if (!email) return;
+    setRequesting(true);
+    setCooldown(30);
+    try {
+      const r = await fetch(`${API}/api/auth/otp/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.detail || "Could not send a code.");
+      setDemoCode(typeof j.demo_code === "string" ? j.demo_code : null);
+      setDelivered(Boolean(j.delivered));
+      setError(null);
+    } catch {
+      setError("Could not send a sign-in code. Check the email address and try again.");
+    } finally {
+      setRequesting(false);
+    }
+  }, [email]);
+
+  useEffect(() => {
+    if (email) void requestCode();
+  }, [email, requestCode]);
+
   async function verify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    if (!email) {
+      setError("Missing email address — start again from the sign-in page.");
+      return;
+    }
     const digits = code.replace(/[^0-9]/g, "");
     if (digits.length !== 6) {
       setError("Enter the 6-digit code from your email.");
@@ -39,14 +72,14 @@ function OtpVerifyForm() {
     }
     setPending(true);
     try {
-      const r = await fetch(`${API}/api/auth/demo`, {
+      const r = await fetch(`${API}/api/auth/otp/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email || "" }),
+        body: JSON.stringify({ email, code: digits }),
       });
       const j = await r.json();
-      if (!j.token || !j.user) {
-        setError("That code didn't match. Try again or request a new code.");
+      if (!r.ok || !j.token || !j.user) {
+        setError(j?.detail || "That code didn't match. Try again or request a new code.");
         setPending(false);
         return;
       }
@@ -54,7 +87,7 @@ function OtpVerifyForm() {
       router.push(destination);
       router.refresh();
     } catch {
-      setError("No connection to the API. Start the API server and try again.");
+      setError("No connection to the API. Try again.");
       setPending(false);
     }
   }
@@ -76,10 +109,20 @@ function OtpVerifyForm() {
         className="flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700"
       >
         <KeyRound aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-        <span>
-          A 6-digit code is on its way to <strong>{email || "your email"}</strong>. It expires in 5
-          minutes.
-        </span>
+        {demoCode ? (
+          <span>
+            Demo mode — no mailbox connected, so here is your code:{" "}
+            <strong className="font-mono text-base font-extrabold tracking-[0.25em]">{demoCode}</strong>
+            . It expires in 5 minutes.
+          </span>
+        ) : delivered ? (
+          <span>
+            A 6-digit code is on its way to <strong>{email || "your email"}</strong>. It expires in 5
+            minutes.
+          </span>
+        ) : (
+          <span>{requesting ? `Sending your code to ${email}…` : `A code for ${email} is on its way.`}</span>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -99,7 +142,7 @@ function OtpVerifyForm() {
           className={`${authInputClass} text-center text-2xl font-bold tracking-[0.5em]`}
         />
         <p className="text-xs text-muted-foreground">
-          Never share this code — Ezri staff will never ask for it. Demo: any 6 digits work.
+          In demo mode the code is shown above. Never share this code — Ezri staff will never ask for it.
         </p>
       </div>
 
@@ -120,11 +163,11 @@ function OtpVerifyForm() {
         </Link>
         <button
           type="button"
-          onClick={() => setCooldown(30)}
-          disabled={cooldown > 0}
+          onClick={() => void requestCode()}
+          disabled={cooldown > 0 || requesting || !email}
           className="font-medium text-brand-700 hover:underline disabled:text-muted-foreground disabled:no-underline"
         >
-          {cooldown > 0 ? `Resend available in ${cooldown}s` : "Resend code"}
+          {requesting ? "Sending…" : cooldown > 0 ? `Resend available in ${cooldown}s` : "Resend code"}
         </button>
       </div>
     </form>
