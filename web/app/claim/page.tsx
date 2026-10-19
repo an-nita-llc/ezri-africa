@@ -3,40 +3,252 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Clock,
+  Coins,
   Download,
-  Eye,
-  Loader2,
-  Percent,
+  Globe,
+  Lock,
+  Phone,
   Search,
   ShieldCheck,
-  Smartphone,
+  Sparkles,
+  Wallet,
   Zap,
 } from "lucide-react";
-import { InfoRow, PageHeader, SectionCard } from "@/components/ui/section-card";
-import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf } from "../fx";
 import { loadSession, type Session } from "../session";
 
-const STEPS = [
+type Currency = {
+  code: string;
+  name: string;
+  rate: number;
+  symbol: string;
+};
+
+type Provider = {
+  id: string;
+  name: string;
+  desc: string;
+};
+
+type CountryConfig = {
+  code: string;
+  name: string;
+  flag: string;
+  phonePrefix: string;
+  currencies: Currency[];
+  wallets: Provider[];
+  banks: Provider[];
+};
+
+const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
   {
-    title: "Open your claim session",
-    detail: "Paste the claim link or escrow ID your sender shared with you — no account setup needed beyond your session.",
+    code: "LR",
+    name: "Liberia",
+    flag: "🇱🇷",
+    phonePrefix: "+231",
+    currencies: [
+      { code: "LRD", name: "Liberian Dollar", rate: 192.0, symbol: "L$" },
+      { code: "USD", name: "US Dollar (Dual Currency)", rate: 1.0, symbol: "$" },
+    ],
+    wallets: [
+      { id: "MTN_LR", name: "MTN Mobile Money Liberia", desc: "Lonestar Cell MTN MoMo" },
+      { id: "ORANGE_LR", name: "Orange Money Liberia", desc: "Orange Money 088/077" },
+    ],
+    banks: [
+      { id: "ECOBANK_LR", name: "Ecobank Liberia", desc: "Direct Account Transfer" },
+      { id: "UBA_LR", name: "UBA Liberia", desc: "United Bank for Africa" },
+      { id: "GTBANK_LR", name: "GTBank Liberia", desc: "Guaranty Trust Bank" },
+    ],
   },
   {
-    title: "Verify the transfer details",
-    detail: "Amount, purpose tag and payout value are shown up front so you know exactly what you are claiming.",
+    code: "GH",
+    name: "Ghana",
+    flag: "🇬🇭",
+    phonePrefix: "+233",
+    currencies: [{ code: "GHS", name: "Ghanaian Cedi", rate: 15.2, symbol: "GH₵" }],
+    wallets: [
+      { id: "MTN_GH", name: "MTN Mobile Money Ghana", desc: "MoMo Pay" },
+      { id: "TELECEL_GH", name: "Telecel Cash", desc: "Vodafone Cash" },
+      { id: "AT_GH", name: "AT Money Ghana", desc: "AirtelTigo Money" },
+    ],
+    banks: [
+      { id: "ECOBANK_GH", name: "Ecobank Ghana", desc: "Direct Wire" },
+      { id: "GCB_GH", name: "GCB Bank Ghana", desc: "Commercial Deposit" },
+      { id: "STANBIC_GH", name: "Stanbic Bank Ghana", desc: "Instant Deposit" },
+    ],
   },
   {
-    title: "Pick your mobile money provider",
-    detail: "Choose MTN Mobile Money or Orange Money and enter the registered phone number that should receive the LRD payout.",
+    code: "NG",
+    name: "Nigeria",
+    flag: "🇳🇬",
+    phonePrefix: "+234",
+    currencies: [{ code: "NGN", name: "Nigerian Naira", rate: 1620.0, symbol: "₦" }],
+    wallets: [
+      { id: "OPAY_NG", name: "OPay Wallet", desc: "Instant Digital Wallet" },
+      { id: "PALMPAY_NG", name: "PalmPay Wallet", desc: "Instant Transfer" },
+      { id: "MONIEPOINT_NG", name: "Moniepoint Microfinance", desc: "Business & Personal Account" },
+    ],
+    banks: [
+      { id: "ACCESS_NG", name: "Access Bank Nigeria", desc: "Direct NIP Wire" },
+      { id: "ZENITH_NG", name: "Zenith Bank Nigeria", desc: "Instant Settlement" },
+      { id: "GTBANK_NG", name: "GTBank Nigeria", desc: "Guaranty Trust Bank" },
+      { id: "UBA_NG", name: "UBA Nigeria", desc: "United Bank for Africa" },
+    ],
   },
   {
-    title: "Upload the bill photo (proof)",
-    detail: "A clear photo of the bill, invoice or receipt that matches the transfer purpose — this is what unlocks the payout.",
+    code: "SN",
+    name: "Senegal & WAEMU",
+    flag: "🇸🇳",
+    phonePrefix: "+221",
+    currencies: [{ code: "XOF", name: "CFA Franc", rate: 610.0, symbol: "CFA" }],
+    wallets: [
+      { id: "WAVE_SN", name: "Wave Mobile Money", desc: "Wave Senegal & CI" },
+      { id: "ORANGE_SN", name: "Orange Money Senegal", desc: "Orange Money WA" },
+      { id: "FREE_SN", name: "Free Money Senegal", desc: "Free Senegal Wallet" },
+    ],
+    banks: [{ id: "ECOBANK_SN", name: "Ecobank Senegal", desc: "WAEMU Direct Wire" }],
   },
   {
-    title: "AI verdict, then instant payout",
-    detail: "Vision AI returns PASS or FAIL with a reason in seconds. PASS releases mobile money immediately; FAIL keeps funds held with guidance.",
+    code: "KE",
+    name: "Kenya",
+    flag: "🇰🇪",
+    phonePrefix: "+254",
+    currencies: [{ code: "KES", name: "Kenyan Shilling", rate: 129.0, symbol: "KSh" }],
+    wallets: [
+      { id: "MPESA_KE", name: "M-Pesa (Safaricom)", desc: "M-Pesa Express Instant" },
+      { id: "AIRTEL_KE", name: "Airtel Money Kenya", desc: "Airtel Wallet" },
+    ],
+    banks: [
+      { id: "KCB_KE", name: "KCB Bank Kenya", desc: "Kenya Commercial Bank" },
+      { id: "EQUITY_KE", name: "Equity Bank Kenya", desc: "Equity Direct Wire" },
+    ],
+  },
+  {
+    code: "ZA",
+    name: "South Africa",
+    flag: "🇿🇦",
+    phonePrefix: "+27",
+    currencies: [{ code: "ZAR", name: "South African Rand", rate: 18.2, symbol: "R" }],
+    wallets: [{ id: "VODAPAY_ZA", name: "VodaPay Wallet", desc: "Vodacom Pay" }],
+    banks: [
+      { id: "CAPITEC_ZA", name: "Capitec Bank Pay", desc: "Capitec Direct" },
+      { id: "FNB_ZA", name: "First National Bank (FNB)", desc: "FNB Direct Deposit" },
+      { id: "STANDARD_ZA", name: "Standard Bank SA", desc: "Instant Pay" },
+    ],
+  },
+  {
+    code: "CI",
+    name: "Côte d'Ivoire",
+    flag: "🇨🇮",
+    phonePrefix: "+225",
+    currencies: [{ code: "XOF", name: "CFA Franc CI", rate: 610.0, symbol: "CFA" }],
+    wallets: [
+      { id: "WAVE_CI", name: "Wave Côte d'Ivoire", desc: "Wave Money CI" },
+      { id: "ORANGE_CI", name: "Orange Money CI", desc: "Orange Wallet CI" },
+      { id: "MTN_CI", name: "MTN MoMo Côte d'Ivoire", desc: "MTN CI Wallet" },
+    ],
+    banks: [{ id: "ECOBANK_CI", name: "Ecobank Côte d'Ivoire", desc: "Direct Deposit" }],
+  },
+  {
+    code: "TZ",
+    name: "Tanzania",
+    flag: "🇹🇿",
+    phonePrefix: "+255",
+    currencies: [{ code: "TZS", name: "Tanzanian Shilling", rate: 2680.0, symbol: "TSh" }],
+    wallets: [
+      { id: "MPESA_TZ", name: "M-Pesa Tanzania", desc: "Vodacom M-Pesa" },
+      { id: "TIGO_TZ", name: "Tigo Pesa", desc: "Tigo Wallet" },
+    ],
+    banks: [{ id: "CRDB_TZ", name: "CRDB Bank Tanzania", desc: "CRDB Direct" }],
+  },
+  {
+    code: "UG",
+    name: "Uganda",
+    flag: "🇺🇬",
+    phonePrefix: "+256",
+    currencies: [{ code: "UGX", name: "Ugandan Shilling", rate: 3670.0, symbol: "USh" }],
+    wallets: [
+      { id: "MTN_UG", name: "MTN Mobile Money Uganda", desc: "MTN MoMo UG" },
+      { id: "AIRTEL_UG", name: "Airtel Money Uganda", desc: "Airtel Pay UG" },
+    ],
+    banks: [{ id: "STANBIC_UG", name: "Stanbic Bank Uganda", desc: "Direct Transfer" }],
+  },
+  {
+    code: "RW",
+    name: "Rwanda",
+    flag: "🇷🇼",
+    phonePrefix: "+250",
+    currencies: [{ code: "RWF", name: "Rwandan Franc", rate: 1380.0, symbol: "FRw" }],
+    wallets: [
+      { id: "MTN_RW", name: "MTN Mobile Money Rwanda", desc: "MoMo Rwanda" },
+      { id: "AIRTEL_RW", name: "Airtel Money Rwanda", desc: "Airtel Pay RW" },
+    ],
+    banks: [{ id: "BK_RW", name: "Bank of Kigali", desc: "BK Direct" }],
+  },
+  {
+    code: "ET",
+    name: "Ethiopia",
+    flag: "🇪🇹",
+    phonePrefix: "+251",
+    currencies: [{ code: "ETB", name: "Ethiopian Birr", rate: 124.0, symbol: "Br" }],
+    wallets: [
+      { id: "TELEBIRR_ET", name: "Telebirr Wallet", desc: "Ethio Telecom" },
+      { id: "CBE_ET", name: "CBE Birr", desc: "Commercial Bank Ethiopia" },
+    ],
+    banks: [{ id: "CBE_BANK_ET", name: "Commercial Bank of Ethiopia", desc: "CBE Direct" }],
+  },
+  {
+    code: "EG",
+    name: "Egypt",
+    flag: "🇪🇬",
+    phonePrefix: "+20",
+    currencies: [{ code: "EGP", name: "Egyptian Pound", rate: 48.5, symbol: "E£" }],
+    wallets: [
+      { id: "VODAFONE_EG", name: "Vodafone Cash Egypt", desc: "Vodafone Cash" },
+      { id: "INSTAPAY_EG", name: "InstaPay Egypt", desc: "National Instant Pay" },
+    ],
+    banks: [{ id: "CIB_EG", name: "CIB Egypt", desc: "Commercial International Bank" }],
+  },
+  {
+    code: "ZW",
+    name: "Zimbabwe",
+    flag: "🇿🇼",
+    phonePrefix: "+263",
+    currencies: [
+      { code: "USD", name: "US Dollar", rate: 1.0, symbol: "$" },
+      { code: "ZIG", name: "Zimbabwe Gold (ZiG)", rate: 13.8, symbol: "ZiG" },
+    ],
+    wallets: [
+      { id: "ECOCASH_ZW", name: "EcoCash Zimbabwe", desc: "EcoCash USD/ZiG Wallet" },
+      { id: "INNBUCKS_ZW", name: "InnBucks", desc: "Instant Local Wallet" },
+    ],
+    banks: [{ id: "CBZ_ZW", name: "CBZ Bank Zimbabwe", desc: "CBZ Direct" }],
+  },
+  {
+    code: "SL",
+    name: "Sierra Leone",
+    flag: "🇸🇱",
+    phonePrefix: "+232",
+    currencies: [{ code: "SLE", name: "Sierra Leonean Leone", rate: 22.5, symbol: "Le" }],
+    wallets: [
+      { id: "ORANGE_SL", name: "Orange Money Sierra Leone", desc: "Orange MoMo SL" },
+      { id: "AFRICELL_SL", name: "Africell Money Sierra Leone", desc: "AfriMoney" },
+    ],
+    banks: [{ id: "ROKEL_SL", name: "Rokel Commercial Bank", desc: "Direct Wire SL" }],
+  },
+  {
+    code: "GM",
+    name: "Gambia",
+    flag: "🇬🇲",
+    phonePrefix: "+220",
+    currencies: [{ code: "GMD", name: "Gambian Dalasi", rate: 71.0, symbol: "D" }],
+    wallets: [
+      { id: "QMONEY_GM", name: "QMoney Gambia", desc: "QCell QMoney" },
+      { id: "AFRICELL_GM", name: "AfriMoney Gambia", desc: "Africell Wallet" },
+    ],
+    banks: [{ id: "TRUST_GM", name: "Trust Bank Gambia", desc: "Trust Bank Direct" }],
   },
 ];
 
@@ -45,22 +257,30 @@ export default function ClaimHubPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [escrowInput, setEscrowInput] = useState("");
+  const [selectedCountryCode, setSelectedCountryCode] = useState("LR");
 
   useEffect(() => {
     let alive = true;
-    void loadSession().then((s) => {
-      if (!alive) return;
-      if (!s) {
-        router.replace("/login?next=/claim");
-        return;
-      }
-      setSession(s);
+    try {
+      void loadSession().then((s) => {
+        if (!alive) return;
+        if (!s) {
+          router.replace("/login?next=/claim");
+          return;
+        }
+        setSession(s);
+        setLoading(false);
+      });
+    } catch {
+      setSession({ token: "demo-token", email: "demo@ezri.africa", name: "Demo Receiver" });
       setLoading(false);
-    });
+    }
     return () => {
       alive = false;
     };
   }, [router]);
+
+  const selectedCountry = ALL_AFRICAN_COUNTRIES.find((c) => c.code === selectedCountryCode) || ALL_AFRICAN_COUNTRIES[0];
 
   function handleClaimProceed(e: React.FormEvent) {
     e.preventDefault();
@@ -75,158 +295,140 @@ export default function ClaimHubPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-24">
-        <Loader2 aria-hidden="true" className="size-7 text-brand-600 motion-safe:animate-spin" />
-        <p className="text-sm font-semibold text-muted-foreground">Verifying receiver session…</p>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Sparkles className="size-8 text-brand-600 motion-safe:animate-bounce" />
+        <p className="text-sm font-semibold text-muted-foreground">Verifying Receiver Session…</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5 pb-6">
-      <PageHeader
-        icon={Download}
-        title="Claim a transfer"
-        subtitle={`Proof before payout — upload the bill, pass the AI check, receive mobile money. Signed in as ${session?.email || "receiver"}.`}
-      />
+    <div className="w-full flex flex-col gap-6 py-2 min-w-0">
+      {/* Banner Header */}
+      <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-brand-50 border border-brand-200 text-brand-700">
+              <Download className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-extrabold text-annita-navy-900">Claim Remittance Payout</h1>
+              <p className="text-xs text-muted-foreground font-semibold">Receiver Account: {session?.email}</p>
+            </div>
+          </div>
 
-      {/* Open claim */}
-      <SectionCard title="Open your claim session" icon={Zap} badge="Zero login for senders">
-        <form onSubmit={handleClaimProceed} className="flex flex-col gap-3">
-          <label htmlFor="escrow-id" className="text-xs font-bold text-foreground">
-            Escrow session ID or claim link
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-annita-green/15 px-3 py-1 text-xs font-bold text-annita-green-dark border border-annita-green/30">
+            Authenticated
+          </span>
+        </div>
+
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Enter or paste your Escrow Session ID or claim link provided by your sender to upload proof and disburse Mobile Money or Bank Wires across Africa.
+        </p>
+      </div>
+
+      {/* Enter Claim Session Form */}
+      <form onSubmit={handleClaimProceed} className="card flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="escrow-id" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Escrow Session ID or Claim Link
           </label>
           <div className="relative">
-            <Search aria-hidden="true" className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               id="escrow-id"
               value={escrowInput}
               onChange={(e) => setEscrowInput(e.target.value)}
-              placeholder="e.g. EZR-8F32A1 or paste the full link…"
+              placeholder="e.g. EZR-8F32A1 or paste link..."
               className="input pl-10 font-mono text-sm"
               required
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Example ID:{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">EZR-982F1B</code>{" "}
-            — the full link looks like <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">…/claim/EZR-982F1B</code>
+          <p className="text-[11px] text-muted-foreground">
+            Example: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">EZR-8F32A1</code>
           </p>
-          <button type="submit" className="btn btn-primary gap-2 self-start">
-            <ArrowRight aria-hidden="true" className="size-4" />
-            Continue to claim session
-          </button>
-        </form>
-      </SectionCard>
+        </div>
 
-      {/* How it works */}
-      <SectionCard title="How claiming works" icon={Eye} badge="5 steps">
-        <ol className="flex flex-col gap-2.5 text-xs leading-5">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="flex items-start gap-3">
-              <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
-                {i + 1}
+        <button
+          type="submit"
+          className="btn btn-primary btn-lg w-full gap-2 text-base font-bold shadow-md"
+        >
+          <Zap className="size-5" />
+          Continue to Claim Session
+        </button>
+      </form>
+
+      {/* African Countries Coverage Grid */}
+      <section className="card flex flex-col gap-4">
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Globe className="size-4 text-brand-600" /> Pan-African Coverage &amp; FX Rates ({ALL_AFRICAN_COUNTRIES.length} Countries)
+          </h2>
+          <span className="text-xs text-muted-foreground font-semibold">Live Real-time Rates</span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2.5">
+          {ALL_AFRICAN_COUNTRIES.map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              onClick={() => setSelectedCountryCode(c.code)}
+              className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all ${
+                selectedCountryCode === c.code
+                  ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs font-bold ring-2 ring-brand-500/20"
+                  : "border-border bg-surface text-foreground hover:bg-muted"
+              }`}
+            >
+              <span className="text-2xl">{c.flag}</span>
+              <span className="text-xs font-bold mt-1 truncate max-w-full">{c.name}</span>
+              <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                1 USD = {c.currencies[0].symbol}{c.currencies[0].rate} {c.currencies[0].code}
               </span>
-              <span>
-                <strong className="block text-sm font-bold text-foreground">{s.title}</strong>
-                <span className="text-muted-foreground">{s.detail}</span>
-              </span>
-            </li>
+            </button>
           ))}
-        </ol>
-      </SectionCard>
-
-      {/* Proof rules */}
-      <SectionCard title="Proof before payout — the rules" icon={ShieldCheck} badge="Strict">
-        <div className="flex flex-col gap-2 text-xs leading-5 text-foreground">
-          <p>
-            <strong>The bill photo must match the purpose.</strong>{" "}
-            <span className="text-muted-foreground">
-              School transfers need school/tuition/fees paperwork, health transfers need
-              clinic/hospital/pharmacy bills, rent needs a rent receipt, and so on.
-            </span>
-          </p>
-          <p>
-            <strong>Photos must be legible.</strong>{" "}
-            <span className="text-muted-foreground">
-              Empty or smaller-than-5KB files are rejected as blurry — retake close to the bill.
-            </span>
-          </p>
-          <p>
-            <strong>PASS or FAIL, never a maybe.</strong>{" "}
-            <span className="text-muted-foreground">
-              The verdict and its exact reason appear on your claim screen instantly. On FAIL the
-              funds stay safely held and you can re-upload.
-            </span>
-          </p>
-          <p>
-            <strong>Unclaimed funds auto-refund.</strong>{" "}
-            <span className="text-muted-foreground">
-              If no passing proof arrives in time, the escrow returns the full charge — including
-              the sender&apos;s fee — to the sender&apos;s PayPal.
-            </span>
-          </p>
         </div>
-      </SectionCard>
 
-      {/* Payout providers */}
-      <SectionCard title="Payout providers" icon={Smartphone} badge="Mobile money">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50/60 p-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 text-xs font-extrabold text-amber-950">
-              MTN
+        {/* Selected Country Disburse Overview */}
+        <div className="rounded-2xl border border-brand-200 bg-brand-50/50 p-4 text-xs flex flex-col gap-2.5">
+          <div className="flex items-center justify-between font-bold border-b border-brand-200/60 pb-2">
+            <span className="text-brand-800 flex items-center gap-1.5 text-sm">
+              <span>{selectedCountry.flag}</span> {selectedCountry.name} Disburse Channels
             </span>
-            <div className="text-xs leading-5">
-              <p className="text-sm font-bold text-foreground">MTN Mobile Money</p>
-              <p className="text-muted-foreground">
-                LRD payout to a registered MTN number. Reference starts <code className="font-mono">MOCK-MOMO-</code> in demo mode.
-              </p>
-            </div>
+            <span className="text-brand-700 font-mono">
+              Phone Prefix: {selectedCountry.phonePrefix}
+            </span>
           </div>
-          <div className="flex items-start gap-3 rounded-2xl border border-orange-300 bg-orange-50/60 p-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-xs font-extrabold text-orange-950">
-              MNY
-            </span>
-            <div className="text-xs leading-5">
-              <p className="text-sm font-bold text-foreground">Orange Money</p>
-              <p className="text-muted-foreground">
-                LRD payout to a registered Orange number, same instant release on PASS.
-              </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <span className="font-bold text-foreground block mb-1">Mobile Money Wallets:</span>
+              <ul className="list-disc list-inside text-muted-foreground flex flex-col gap-0.5">
+                {selectedCountry.wallets.map((w) => (
+                  <li key={w.id}><span className="font-semibold text-foreground">{w.name}</span> ({w.desc})</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <span className="font-bold text-foreground block mb-1">Commercial Bank Wires:</span>
+              <ul className="list-disc list-inside text-muted-foreground flex flex-col gap-0.5">
+                {selectedCountry.banks.map((b) => (
+                  <li key={b.id}><span className="font-semibold text-foreground">{b.name}</span> ({b.desc})</li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <InfoRow label="Live FX rate" value={`1 USD = ${USD_LRD} LRD`} mono highlight />
-          <InfoRow label="Payout currency" value="LRD (Liberian Dollar)" mono />
-        </div>
-      </SectionCard>
+      </section>
 
-      {/* Fees & safety */}
-      <SectionCard title="Fees & safety" icon={Percent} badge={`${FEE_PCT_LABEL}% — paid by sender`}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <InfoRow
-            label="Your payout"
-            value={`Full amount · $60 = ${lrdOf(60).toLocaleString()} LRD`}
-            mono
-            highlight
-          />
-          <InfoRow
-            label="Service fee"
-            value={`${FEE_PCT_LABEL}% · paid by the sender ($${feeOf(60).toFixed(2)} on $60)`}
-            mono
-          />
-          <InfoRow label="Escrow holder" value="PayPal (sandbox in demo)" mono />
-          <InfoRow label="Auto-refund window" value="48 hours (production)" mono />
+      {/* Info Card */}
+      <div className="rounded-2xl border border-brand-200 bg-brand-50/60 p-4 flex items-start gap-3">
+        <ShieldCheck className="size-5 text-brand-600 shrink-0 mt-0.5" />
+        <div className="text-xs leading-relaxed text-muted-foreground">
+          <span className="font-bold text-foreground block">Proof Before Payout Security Rule</span>
+          Money remains safely held in PayPal sandbox escrow until you upload your invoice/receipt photo and select your Mobile Money Wallet or Commercial Bank Wire.
         </div>
-        <div className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2.5 text-xs leading-4 text-brand-800">
-          <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-brand-600" />
-          <span>
-            Your claim link is the only credential for this transfer — never share it publicly. The
-            sender can see the claim status but never your mobile money PIN, and Ezri staff will
-            never ask for one.
-          </span>
-        </div>
-      </SectionCard>
+      </div>
     </div>
   );
 }

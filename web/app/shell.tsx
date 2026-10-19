@@ -15,7 +15,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
     pathname === "/verify-email" ||
-    pathname === "/verify-otp" ||
     pathname === "/two-factor";
 
   const isHomeChat = pathname === "/";
@@ -25,13 +24,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div
-      className={`flex flex-col bg-background ${
-        isHomeChat ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh"
-      }`}
-    >
+    <div className="flex min-h-dvh flex-col bg-background w-full">
       <Sidebar />
-      <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur-md md:hidden">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur-md md:hidden">
         <Logo size="sm" />
         <HamburgerMenu />
       </header>
@@ -41,16 +36,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         Skip to main content
       </a>
-      <main
-        id="main-content"
-        className="flex min-h-0 flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0 md:pl-64"
-      >
+      <main id="main-content" className="flex-1 flex flex-col pb-20 md:pb-0 md:pl-64 w-full min-w-0">
         {isHomeChat ? (
-          <div className="flex w-full min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="w-full flex-1 flex flex-col h-[calc(100dvh-4rem)] md:h-dvh overflow-hidden">
             {children}
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="w-full flex-1 flex flex-col p-2 sm:p-4 md:p-6 min-w-0">
             {children}
           </div>
         )}

@@ -1,181 +1,303 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
+  Banknote,
+  Building2,
   CalendarRange,
   Check,
   CheckCircle2,
   Clock,
   Copy,
   DollarSign,
+  Download,
   ExternalLink,
   Filter,
+  GraduationCap,
+  HeartPulse,
   History,
+  Home,
+  KeyRound,
+  Layers,
   List,
   Lock,
+  Pause,
   RefreshCw,
   RotateCcw,
   Search,
   ShieldAlert,
   ShieldCheck,
+  Siren,
   Sparkles,
   Table,
   TrendingUp,
   Wallet,
+  Wheat,
   Zap,
 } from "lucide-react";
-import { FEE_PCT_LABEL, feeOf, lrdOf, totalOf } from "../fx";
+import { Modal } from "@/components/ui/modal";
+import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf, totalOf } from "../fx";
 import { authHeaders, loadSession, type Session } from "../session";
-import { buildTimelineModel, STATUS_LEGEND } from "./timeline-model";
-
-const EscrowTimeline = dynamic(
-  () =>
-    import("@/components/ledger/escrow-timeline").then((m) => m.EscrowTimeline),
-  {
-    ssr: false,
-    loading: () => (
-      <p className="py-16 text-center text-sm font-semibold text-muted-foreground">
-        Opening escrow timeline…
-      </p>
-    ),
-  }
-);
-
-const LedgerTableView = dynamic(
-  () =>
-    import("@/components/ledger/ledger-table").then((m) => m.LedgerTable),
-  {
-    ssr: false,
-    loading: () => (
-      <p className="py-16 text-center text-sm font-semibold text-muted-foreground">
-        Opening transfers table…
-      </p>
-    ),
-  }
-);
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-/** Row fee: stored value for new rows, 2% fallback for seeds created before the fee column. */
-const rowFee = (amountUsd: number, feeUsd?: number) =>
-  Number(feeUsd) > 0 ? Number(feeUsd) : feeOf(Number(amountUsd) || 0);
+type TimelineCompType = React.ComponentType<{ rows: any[]; onOpen?: (id: string) => void }>;
+type TableCompType = React.ComponentType<{ rows: any[]; onOpen?: (id: string) => void }>;
 
-const TAG_OPTIONS = [  { id: "ALL", label: "All Categories" },
-  { id: "SCHOOL", label: "School 🎓" },
-  { id: "FOOD", label: "Food 🌾" },
-  { id: "HEALTH", label: "Health 🏥" },
-  { id: "RENT", label: "Rent 🏠" },
-  { id: "EMERGENCY", label: "Emergency 🚨" },
-  { id: "GENERAL", label: "General 💵" },
+const STATUS_LEGEND = [
+  { status: "RELEASED", label: "Released", color: "green" },
+  { status: "HELD", label: "Escrow Held", color: "amber" },
+  { status: "NEEDS_RETRY", label: "Action Needed", color: "red" },
+  { status: "REFUNDED", label: "Refunded", color: "gray" },
+  { status: "EXPIRED", label: "Expired", color: "slate" },
 ];
 
-/** Legend dots in the app palette (Bryntum event colors are theme-internal). */
 const LEGEND_DOT: Record<string, string> = {
-  gray: "bg-slate-400",
-  orange: "bg-amber-500",
-  red: "bg-rose-500",
   green: "bg-emerald-500",
-  teal: "bg-teal-500",
-  blue: "bg-sky-500",
+  amber: "bg-amber-500",
+  red: "bg-rose-500",
+  gray: "bg-slate-400",
+  slate: "bg-slate-400",
 };
+
+const TAG_OPTIONS = [
+  { id: "ALL", label: "All Categories", icon: Layers },
+  { id: "SCHOOL", label: "School", icon: GraduationCap },
+  { id: "FOOD", label: "Food & Grocery", icon: Wheat },
+  { id: "HEALTH", label: "Healthcare", icon: HeartPulse },
+  { id: "RENT", label: "Rent & Housing", icon: Home },
+  { id: "EMERGENCY", label: "Emergency", icon: Siren },
+  { id: "GENERAL", label: "General", icon: Banknote },
+];
+
+function tagIcon(tagStr: string) {
+  switch (tagStr.toUpperCase()) {
+    case "SCHOOL":
+      return GraduationCap;
+    case "FOOD":
+      return Wheat;
+    case "HEALTH":
+      return HeartPulse;
+    case "RENT":
+      return Home;
+    case "EMERGENCY":
+      return Siren;
+    default:
+      return Banknote;
+  }
+}
 
 function statusPill(status: string) {
   switch (status) {
     case "RELEASED":
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/20">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 ring-1 ring-inset ring-emerald-600/20 shadow-2xs">
           <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
           Released
         </span>
       );
     case "HELD":
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-inset ring-amber-600/20 shadow-2xs">
           <span className="size-1.5 rounded-full bg-amber-500" />
           Escrow Held
         </span>
       );
     case "NEEDS_RETRY":
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-600/20">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-800 ring-1 ring-inset ring-rose-600/20 shadow-2xs">
           <span className="size-1.5 rounded-full bg-rose-500" />
           Action Needed
         </span>
       );
     case "EXPIRED":
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
-          <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-500/20 shadow-2xs">
+          <span className="size-1.5 rounded-full bg-slate-400" />
           Expired
         </span>
       );
     case "REFUNDED":
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
-          <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-500/20 shadow-2xs">
+          <span className="size-1.5 rounded-full bg-slate-400" />
           Refunded
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-inset ring-border">
-          <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-500/20 shadow-2xs">
+          <span className="size-1.5 rounded-full bg-slate-400" />
           {status}
         </span>
       );
   }
 }
 
-/** Inline 4-digit PIN step — the agent never executes without it (demo PIN 1234). */
-function PinEntry({
-  pin,
-  pinError,
-  onPinChange,
-  onBack,
-  onConfirm,
-  confirmLabel,
-  confirmClass,
-}: {
-  pin: string;
-  pinError: string;
-  onPinChange: (v: string) => void;
-  onBack: () => void;
-  onConfirm: () => void;
-  confirmLabel: string;
-  confirmClass: string;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          maxLength={4}
-          value={pin}
-          onChange={(event) => onPinChange(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
-          placeholder="••••"
-          aria-label="4-digit money PIN"
-          className="input w-28 min-h-9 text-center text-base font-bold tracking-[0.4em]"
-        />
-        <span className="text-xs font-semibold text-muted-foreground">Demo PIN: 1234</span>
-      </div>
-      {pinError ? <p className="text-xs font-bold text-danger">{pinError}</p> : null}
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">
-          Back
-        </button>
-        <button type="button" onClick={onConfirm} className={`${confirmClass} btn-sm gap-1`}>
-          {confirmLabel}
-        </button>
-      </div>
-    </div>
-  );
+function rowFee(amountUsd: number, feeUsd?: number): number {
+  if (typeof feeUsd === "number" && feeUsd > 0) return feeUsd;
+  return feeOf(amountUsd);
+}
+
+function downloadRemittanceSlipAsImage(escrowRecord: any, sessionName: string, sessionEmail: string) {
+  if (!escrowRecord) return;
+  const canvas = document.createElement("canvas");
+  canvas.width = 600;
+  canvas.height = 800;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const amount = escrowRecord.amount_usd || 60;
+  const fee = escrowRecord.fee_usd || feeOf(amount);
+  const total = amount + fee;
+  const lrd = amount * 192;
+  const eid = escrowRecord.escrow_id || escrowRecord.id || "EZR-8F32A1";
+  const tag = escrowRecord.tag || "SCHOOL";
+  const note = escrowRecord.note || "Purpose-locked remittance";
+
+  // Background
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, 600, 800);
+
+  // Header Banner
+  ctx.fillStyle = "#003868";
+  ctx.fillRect(0, 0, 600, 140);
+
+  // Accent Bar
+  ctx.fillStyle = "#ea580c";
+  ctx.fillRect(0, 0, 600, 8);
+
+  // Brand Name
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 24px sans-serif";
+  ctx.fillText("EZRI AFRICA", 30, 48);
+
+  ctx.font = "14px sans-serif";
+  ctx.fillStyle = "#d9e4f1";
+  ctx.fillText("Official Remittance Escrow Receipt", 30, 72);
+
+  ctx.font = "bold 12px monospace";
+  ctx.fillStyle = "#f26522";
+  ctx.fillText(`SESSION: ${eid}`, 30, 105);
+
+  // Status Badge
+  ctx.fillStyle = "#00a651";
+  ctx.fillRect(450, 40, 120, 32);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 12px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(escrowRecord.status || "HELD", 510, 60);
+  ctx.textAlign = "left";
+
+  // Main Card
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(30, 160, 540, 580, 16);
+  ctx.fill();
+  ctx.stroke();
+
+  let y = 195;
+
+  // Section 1: Sender & Purpose
+  ctx.fillStyle = "#475569";
+  ctx.font = "bold 11px sans-serif";
+  ctx.fillText("SENDER & PURPOSE DETAILS", 50, y);
+  y += 24;
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "13px sans-serif";
+  ctx.fillText(`Sender Name: ${sessionName || "Demo Sender"}`, 50, y);
+  y += 20;
+  ctx.fillText(`Sender Email: ${sessionEmail || "demo@ezri.africa"}`, 50, y);
+  y += 20;
+  ctx.fillText(`Purpose Lock Tag: ${tag}`, 50, y);
+  y += 20;
+  ctx.fillText(`Note: ${note}`, 50, y);
+  y += 30;
+
+  // Divider
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.beginPath();
+  ctx.moveTo(50, y);
+  ctx.lineTo(550, y);
+  ctx.stroke();
+  y += 25;
+
+  // Section 2: Financials
+  ctx.fillStyle = "#475569";
+  ctx.font = "bold 11px sans-serif";
+  ctx.fillText("FINANCIAL BREAKDOWN", 50, y);
+  y += 24;
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "13px sans-serif";
+  ctx.fillText(`Transfer Amount: $${amount.toFixed(2)} USD`, 50, y);
+  y += 20;
+  ctx.fillText(`Ezri Platform Fee (2%): $${fee.toFixed(2)} USD`, 50, y);
+  y += 20;
+
+  ctx.font = "bold 15px sans-serif";
+  ctx.fillStyle = "#ea580c";
+  ctx.fillText(`Total Charged to Sender: $${total.toFixed(2)} USD`, 50, y);
+  y += 30;
+
+  ctx.fillStyle = "#0b4d8f";
+  ctx.font = "bold 13px sans-serif";
+  ctx.fillText(`Exchange Rate: 1 USD = 192.00 LRD`, 50, y);
+  y += 20;
+
+  ctx.fillStyle = "#007a3d";
+  ctx.font = "bold 16px sans-serif";
+  ctx.fillText(`Guaranteed Local Payout: ${lrd.toLocaleString()} LRD`, 50, y);
+  y += 35;
+
+  // Divider
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.beginPath();
+  ctx.moveTo(50, y);
+  ctx.lineTo(550, y);
+  ctx.stroke();
+  y += 25;
+
+  // Section 3: Claim Instructions
+  ctx.fillStyle = "#475569";
+  ctx.font = "bold 11px sans-serif";
+  ctx.fillText("RECEIVER CLAIM INSTRUCTIONS", 50, y);
+  y += 24;
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "12px monospace";
+  ctx.fillText(`Claim Link: ${window.location.origin}/claim/${eid}`, 50, y);
+  y += 24;
+
+  ctx.font = "12px sans-serif";
+  ctx.fillStyle = "#475569";
+  ctx.fillText("1. Open claim link in any browser (Zero login required).", 50, y);
+  y += 20;
+  ctx.fillText("2. Select receiving provider (Mobile Money or Bank Wire).", 50, y);
+  y += 20;
+  ctx.fillText("3. Upload bill or receipt photo for Vision AI inspection.", 50, y);
+  y += 20;
+  ctx.fillText("4. Payout is disbursed automatically upon AI PASS.", 50, y);
+
+  // Footer
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("Protected by PayPal Sandbox Escrow & OpenRouter AI Engine", 300, 765);
+
+  const link = document.createElement("a");
+  link.download = `Ezri-Remittance-Receipt-${eid}.png`;
+  link.href = canvas.toDataURL("image/png");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 export default function DashboardPage() {
@@ -193,10 +315,31 @@ export default function DashboardPage() {
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [ledgerView, setLedgerView] = useState<"cards" | "table" | "timeline">(
-    "cards"
-  );
-  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [ledgerView, setLedgerView] = useState<"cards" | "table" | "timeline">("cards");
+
+  const [TimelineComp, setTimelineComp] = useState<TimelineCompType | null>(null);
+  const [TableComp, setTableComp] = useState<TableCompType | null>(null);
+
+  useEffect(() => {
+    if (ledgerView === "timeline" && !TimelineComp) {
+      let alive = true;
+      void import("@/components/ledger/escrow-timeline").then((m) => {
+        if (alive) setTimelineComp(() => m.EscrowTimeline as any);
+      });
+      return () => {
+        alive = false;
+      };
+    }
+    if (ledgerView === "table" && !TableComp) {
+      let alive = true;
+      void import("@/components/ledger/ledger-table").then((m) => {
+        if (alive) setTableComp(() => m.LedgerTable as any);
+      });
+      return () => {
+        alive = false;
+      };
+    }
+  }, [ledgerView, TimelineComp, TableComp]);
 
   function resetConfirmPins() {
     setPinStage(false);
@@ -275,30 +418,12 @@ export default function DashboardPage() {
     });
   }
 
-  // Filtered Rows Calculation
   const filteredRows = rows.filter((r) => {
     if (selectedTag !== "ALL" && r.tag !== selectedTag) return false;
     if (selectedStatus !== "ALL" && r.status !== selectedStatus) return false;
     return true;
   });
 
-  // Jump from the table/timeline into a transfer's action card.
-  function openEscrow(id: string) {
-    setLedgerView("cards");
-    setHighlightId(id);
-    window.setTimeout(() => {
-      document
-        .getElementById(`escrow-${id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 60);
-  }
-
-  const timelineModel = useMemo(
-    () => buildTimelineModel(filteredRows),
-    [filteredRows]
-  );
-
-  // Financial Metrics Calculation
   const totalVolume = rows.reduce((acc, r) => acc + (r.amount_usd || 0), 0);
   const totalFees = rows.reduce((acc, r) => acc + rowFee(r.amount_usd, r.fee_usd), 0);
   const heldVolume = rows
@@ -317,16 +442,16 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto">
+    <div className="w-full flex flex-col gap-6 min-w-0">
       {/* Top Banner Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-              Transfers & Escrow Ledger
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-annita-navy-900">
+              Transfers &amp; Escrow Ledger
             </h1>
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 border border-brand-200">
-              Audited Access
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 border border-brand-200 shadow-2xs">
+              <ShieldCheck className="size-3.5" /> Audited Access
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -351,7 +476,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Financial Summary Ribbon */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         {/* Metric 1: Total Volume */}
         <div className="rounded-3xl border border-border bg-surface p-5 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -363,8 +488,7 @@ export default function DashboardPage() {
           <div className="mt-3">
             <p className="text-2xl font-extrabold tracking-tight text-foreground">${totalVolume.toFixed(2)} USD</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              ≈ {lrdOf(totalVolume).toLocaleString()} LRD · Ezri fee {FEE_PCT_LABEL}% = $
-              {totalFees.toFixed(2)}
+              ≈ {lrdOf(totalVolume).toLocaleString()} LRD · Ezri fee {FEE_PCT_LABEL}% = ${totalFees.toFixed(2)}
             </p>
           </div>
         </div>
@@ -393,7 +517,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3">
             <p className="text-2xl font-extrabold tracking-tight text-emerald-950">{releasedCount} Transfers</p>
-            <p className="text-xs text-emerald-700/80 mt-0.5">Disbursed via Orange & MTN</p>
+            <p className="text-xs text-emerald-700/80 mt-0.5">Disbursed via Orange &amp; MTN</p>
           </div>
         </div>
 
@@ -412,10 +536,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Natural Language Search & Filter Toolbar */}
-      <div className="card flex flex-col gap-4">
+      {/* Search & Vector Icon Category Filter Toolbar */}
+      <div className="card flex flex-col gap-4 w-full">
         <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-          {/* Search Box */}
           <form
             className="flex-1 flex gap-2"
             onSubmit={(e) => {
@@ -429,7 +552,7 @@ export default function DashboardPage() {
                 id="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Ask or search ledger (e.g. 'risky', 'school', 'mom', 'Orange')..."
+                placeholder="Search ledger (e.g. 'risky', 'school', 'mom')..."
                 className="input pl-10"
               />
             </div>
@@ -438,8 +561,7 @@ export default function DashboardPage() {
             </button>
           </form>
 
-          {/* Status Filter Chips */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             {["ALL", "HELD", "RELEASED", "NEEDS_RETRY", "REFUNDED"].map((st) => (
               <button
                 key={st}
@@ -457,351 +579,112 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Category Tag Selector */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        {/* Vector Icon Category Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto border-t border-border pt-3">
           <span className="text-xs font-bold text-muted-foreground shrink-0 uppercase tracking-wider">
             Category:
           </span>
-          {TAG_OPTIONS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setSelectedTag(t.id)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 ${
-                selectedTag === t.id
-                  ? "bg-brand-600 text-white shadow-2xs"
-                  : "bg-surface border border-border text-foreground hover:bg-muted"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          {TAG_OPTIONS.map((t) => {
+            const Icon = t.icon;
+            const selected = selectedTag === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setSelectedTag(t.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
+                  selected
+                    ? "bg-brand-600 text-white shadow-2xs"
+                    : "bg-surface border border-border text-foreground hover:bg-muted"
+                }`}
+              >
+                <Icon className="size-3.5" />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Ledger views: action cards · AG Grid table · Bryntum escrow timeline */}
-      <div
-        role="tablist"
-        aria-label="Ledger views"
-        className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1"
-      >
-        {(
-          [
-            { id: "cards", label: "Cards", icon: List },
-            { id: "table", label: "Table", icon: Table },
-            { id: "timeline", label: "Timeline", icon: CalendarRange },
-          ] as const
-        ).map((v) => {
-          const Icon = v.icon;
-          const active = ledgerView === v.id;
-          return (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setLedgerView(v.id)}
-              className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-bold transition-all ${
-                active
-                  ? "bg-surface text-foreground shadow-2xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon aria-hidden="true" className="size-4 shrink-0" />
-              <span className="truncate">{v.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {ledgerView === "table" ? (
-        <LedgerTableView rows={filteredRows} onOpen={openEscrow} />
-      ) : ledgerView === "timeline" ? (
-        <div className="card flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
-            <h2 className="text-sm font-extrabold text-foreground">
-              Escrow timeline — money against the refund clock
-            </h2>
-            <div className="flex flex-wrap items-center gap-2">
-              {STATUS_LEGEND.map((l) => (
-                <span
-                  key={l.status}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground"
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`size-2.5 rounded-full ${LEGEND_DOT[l.color] ?? "bg-slate-400"}`}
-                  />
-                  {l.label}
-                </span>
-              ))}
-            </div>
-          </div>
-          {filteredRows.length === 0 ? (
-            <div className="card py-12 text-center">
-              <p className="text-sm font-semibold">No transactions match your query.</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Try resetting your filters or query terms.
-              </p>
-            </div>
-          ) : (
-            <EscrowTimeline
-              resources={timelineModel.resources}
-              events={timelineModel.events}
-              startDate={timelineModel.startDate}
-              endDate={timelineModel.endDate}
-            />
-          )}
-          <p className="text-xs leading-5 text-muted-foreground">
-            Each bar runs from creation to its refund deadline inside its purpose
-            lane. Powered by Bryntum Scheduler (trial).
-          </p>
-        </div>
-      ) : (
-      <div className="flex flex-col gap-3">
-        {/* Vertical transfer list — everything on the page, up/down scroll only */}
+      {/* Ledger Cards View with PNG Image Receipt Download */}
+      <div className="flex flex-col gap-3 w-full">
         {filteredRows.length === 0 ? (
           <div className="card py-12 text-center">
             <p className="text-sm font-semibold">No transactions match your query.</p>
             <p className="mt-1 text-xs text-muted-foreground">Try resetting your filters or query terms.</p>
           </div>
         ) : (
-          filteredRows.map((r) => (
-            <div
-              key={r.id}
-              id={`escrow-${r.id}`}
-              className={`card flex scroll-mt-20 flex-col gap-3 transition-shadow ${
-                highlightId === r.id ? "ring-2 ring-brand-500" : ""
-              }`}
-            >
-              {/* Row 1: escrow id + status */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-mono text-sm font-extrabold text-foreground">{r.id}</p>
-                  {r.note && (
-                    <p className="max-w-md truncate text-xs text-muted-foreground">{r.note}</p>
-                  )}
+          filteredRows.map((r) => {
+            const TagIcon = tagIcon(r.tag || "GENERAL");
+            return (
+              <div key={r.id} className="card flex flex-col gap-3 w-full">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-extrabold text-foreground">{r.id}</p>
+                    {r.note && <p className="max-w-md truncate text-xs text-muted-foreground">{r.note}</p>}
+                  </div>
+                  {statusPill(r.status)}
                 </div>
-                {statusPill(r.status)}
-              </div>
 
-              {/* Row 2: amounts stacked on the page */}
-              <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 rounded-2xl bg-muted/40 p-3 text-xs">
-                <div>
-                  <span className="block font-bold uppercase tracking-wider text-muted-foreground">
-                    Amount
-                  </span>
-                  <span className="text-lg font-extrabold text-foreground">
-                    ${r.amount_usd}.00 USD
-                  </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 rounded-2xl bg-muted/40 p-3 text-xs">
+                  <div>
+                    <span className="block font-bold uppercase tracking-wider text-muted-foreground">Amount</span>
+                    <span className="text-lg font-extrabold text-foreground">${r.amount_usd}.00 USD</span>
+                  </div>
+                  <div>
+                    <span className="block font-bold uppercase tracking-wider text-muted-foreground">Payout</span>
+                    <span className="text-lg font-extrabold text-foreground">{lrdOf(r.amount_usd).toLocaleString()} LRD</span>
+                  </div>
+                  <div>
+                    <span className="block font-bold uppercase tracking-wider text-muted-foreground">Ezri fee ({FEE_PCT_LABEL}%)</span>
+                    <span className="text-sm font-extrabold text-foreground">${rowFee(r.amount_usd, r.fee_usd).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="block font-bold uppercase tracking-wider text-muted-foreground">Sender charged</span>
+                    <span className="text-sm font-extrabold text-foreground">${totalOf(r.amount_usd).toFixed(2)} USD</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="block font-bold uppercase tracking-wider text-muted-foreground">
-                    Payout
-                  </span>
-                  <span className="text-lg font-extrabold text-foreground">
-                    {lrdOf(r.amount_usd).toLocaleString()} LRD
-                  </span>
-                </div>
-                <div>
-                  <span className="block font-bold uppercase tracking-wider text-muted-foreground">
-                    Ezri fee ({FEE_PCT_LABEL}%)
-                  </span>
-                  <span className="text-sm font-extrabold text-foreground">
-                    ${rowFee(r.amount_usd, r.fee_usd).toFixed(2)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block font-bold uppercase tracking-wider text-muted-foreground">
-                    Sender charged
-                  </span>
-                  <span className="text-sm font-extrabold text-foreground">
-                    ${totalOf(r.amount_usd).toFixed(2)} USD
-                  </span>
-                </div>
-              </div>
 
-              {/* Row 3: meta */}
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 font-bold text-brand-700">
-                  {r.tag}
-                </span>
-                <span className="font-semibold text-foreground">{r.provider || "No provider yet"}</span>
-                {r.mock_momo_txn_id && (
-                  <span className="font-mono text-muted-foreground">{r.mock_momo_txn_id}</span>
-                )}
-              </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 font-bold text-xs text-brand-700">
+                      <TagIcon className="size-3.5 text-brand-600" />
+                      {r.tag}
+                    </span>
+                    <span className="font-semibold text-xs text-foreground">{r.provider || "No provider yet"}</span>
+                  </div>
 
-              {/* Row 4: actions */}
-              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-                <button
-                  type="button"
-                  onClick={() => copyClaimLink(r.id)}
-                  className="btn btn-secondary btn-sm gap-1"
-                >
-                  {copiedId === r.id ? (
-                    <Check className="size-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="size-3.5" />
-                  )}
-                  {copiedId === r.id ? "Copied" : "Copy Claim Link"}
-                </button>
-                <a
-                  href={`/claim/${r.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-ghost btn-sm gap-1"
-                >
-                  <ExternalLink className="size-3.5" /> Open Claim
-                </a>
-                {r.status === "NEEDS_RETRY" || r.status === "HELD" ? (
-                  <>
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedEscrow(r);
-                        setConfirmOverride(true);
-                        setConfirmRefund(false);
-                        resetConfirmPins();
-                      }}
-                      className="btn btn-secondary btn-sm"
+                      onClick={() => copyClaimLink(r.id)}
+                      className="btn btn-secondary btn-sm gap-1"
                     >
-                      Override AI
+                      {copiedId === r.id ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                      {copiedId === r.id ? "Copied" : "Copy Claim Link"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedEscrow(r);
-                        setConfirmRefund(true);
-                        setConfirmOverride(false);
-                        resetConfirmPins();
-                      }}
-                      className="btn btn-danger-outline btn-sm"
+                      onClick={() => downloadRemittanceSlipAsImage(r, session?.name || "Sender", session?.email || "")}
+                      className="btn btn-secondary btn-sm gap-1"
+                      title="Download PNG Image Receipt"
                     >
-                      Refund
+                      <Download className="size-3.5" /> Download Image Slip
                     </button>
-                  </>
-                ) : null}
+                    <a
+                      href={`/claim/${r.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-ghost btn-sm gap-1"
+                    >
+                      <ExternalLink className="size-3.5" /> Open Claim
+                    </a>
+                  </div>
+                </div>
               </div>
-
-              {/* Inline confirmations — on the page, no popups.
-                  Two stages: approval first, then 4-digit PIN (demo 1234). */}
-              {selectedEscrow?.id === r.id && confirmOverride && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-brand-300 bg-brand-50 p-4 text-xs">
-                  <p className="font-bold text-foreground">
-                    Override AI &amp; disburse mobile money for {r.id}? The manual
-                    override is recorded on the ledger.
-                  </p>
-                  {!pinStage ? (
-                    <>
-                      <p className="text-xs leading-4 text-muted-foreground">
-                        The agent pauses here — nothing executes until you approve and enter your PIN.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setConfirmOverride(false);
-                            resetConfirmPins();
-                          }}
-                          className="btn btn-secondary btn-sm"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPinStage(true)}
-                          className="btn btn-primary btn-sm gap-1"
-                        >
-                          <ShieldAlert className="size-3.5" /> Approve &amp; enter PIN
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <PinEntry
-                      pin={pin}
-                      pinError={pinError}
-                      onPinChange={(v) => {
-                        setPin(v);
-                        setPinError("");
-                      }}
-                      onBack={() => {
-                        setPinStage(false);
-                        setPin("");
-                        setPinError("");
-                      }}
-                      onConfirm={() => void handleOverride()}
-                      confirmLabel="Confirm Override &amp; Disburse"
-                      confirmClass="btn btn-primary"
-                    />
-                  )}
-                </div>
-              )}
-              {selectedEscrow?.id === r.id && confirmRefund && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-danger/30 bg-danger/10 p-4 text-xs">
-                  <p className="font-bold text-danger">
-                    Refund the PayPal escrow capture for {r.id}? Captured funds
-                    return to the sender&apos;s PayPal account.
-                  </p>
-                  {!pinStage ? (
-                    <>
-                      <p className="text-xs leading-4 text-danger/80">
-                        The agent pauses here — no refund runs until you approve and enter your PIN.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setConfirmRefund(false);
-                            resetConfirmPins();
-                          }}
-                          className="btn btn-secondary btn-sm"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPinStage(true)}
-                          className="btn btn-primary btn-sm gap-1"
-                        >
-                          <ShieldAlert className="size-3.5" /> Approve &amp; enter PIN
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <PinEntry
-                      pin={pin}
-                      pinError={pinError}
-                      onPinChange={(v) => {
-                        setPin(v);
-                        setPinError("");
-                      }}
-                      onBack={() => {
-                        setPinStage(false);
-                        setPin("");
-                        setPinError("");
-                      }}
-                      onConfirm={() => void handleRefund()}
-                      confirmLabel="Confirm PayPal Refund"
-                      confirmClass="btn btn-danger"
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
-      </div>
-      )}
-
-      {/* List footer */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
-        <span>
-          Showing <b>{filteredRows.length}</b> of <b>{rows.length}</b> entries
-        </span>
-        <span className="flex items-center gap-1">
-          <ShieldCheck className="size-3.5 text-brand-600" /> Proof Before Payout Enforced
-        </span>
       </div>
     </div>
   );

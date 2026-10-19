@@ -1,0 +1,62 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Escrow {
+  id              String   @id
+  amountUsd       Float    @map("amount_usd")
+  feeUsd          Float    @default(0) @map("fee_usd")
+  tag             String
+  note            String   @default("")
+  recipient       String   @default("mom")
+  status          String   @default("DRAFT")
+  paypalOrderId   String   @default("") @map("paypal_order_id")
+  paypalCaptureId String   @default("") @map("paypal_capture_id")
+  provider        String   @default("")
+  providerNumber  String   @default("") @map("provider_number")
+  verdict         String   @default("")
+  verdictReason   String   @default("") @map("verdict_reason")
+  mockMomoTxnId   String   @default("") @map("mock_momo_txn_id")
+  senderEmail     String   @default("") @map("sender_email")
+  createdAt       Float    @map("created_at")
+  expiresAt       Float    @map("expires_at")
+
+  @@map("escrows")
+}
+
+model User {
+  email     String   @id
+  name      String   @default("")
+  pwHash    String   @map("pw_hash")
+  createdAt Float    @map("created_at")
+
+  @@map("users")
+}
+
+model Session {
+  token     String   @id
+  email     String
+  createdAt Float    @map("created_at")
+
+  @@map("sessions")
+}
+
+model VirtualCard {
+  id         String   @id
+  userEmail  String   @map("user_email")
+  name       String
+  number     String
+  expiry     String
+  cvv        String
+  balance    Float    @default(100.0)
+  frozen     Boolean  @default(false)
+  type       String   @default("Visa")
+  createdAt  Float    @map("created_at")
+
+  @@map("virtual_cards")
+}

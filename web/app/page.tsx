@@ -2,12 +2,16 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { get as idbGet, set as idbSet } from "idb-keyval";
 import {
   AudioLines,
   Bot,
   Check,
+  ChevronRight,
   Copy,
+  Download,
   ExternalLink,
+  FileText,
   History as HistoryIcon,
   Loader2,
   Lock,
@@ -17,6 +21,8 @@ import {
   Send,
   ShieldAlert,
   Sparkles,
+  Volume2,
+  VolumeX,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +33,7 @@ import { authHeaders, loadSession, type Session } from "./session";
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const PP_CID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
 const DEMO_PIN = "1234";
+const SPEECH_KEY = "ezri:speech_enabled";
 
 const INITIAL_CHIPS = [
   "Send $60 to mom for school",
@@ -37,7 +44,6 @@ const INITIAL_CHIPS = [
   "Configure Purpose Lock",
 ];
 
-/** Chips offered after a non-transfer (conversational) reply. */
 const CHAT_CHIPS = [
   "Send $60 to mom for school",
   "What are the fees?",
@@ -94,7 +100,69 @@ function statusBadge(status: string) {
   return `${base}bg-muted text-muted-foreground border border-border`;
 }
 
-/* ── Live agent activity panel (terminal style, like watching AI code) ── */
+function downloadRemittanceSlip(escrowRecord: any, sessionName: string, sessionEmail: string) {
+  if (!escrowRecord) return;
+  const amount = escrowRecord.amount_usd || 60;
+  const fee = escrowRecord.fee_usd || feeOf(amount);
+  const total = amount + fee;
+  const lrd = amount * 192;
+
+  const slip = `
+====================================================
+           EZRI AFRICA — REMITTANCE SLIP
+            Purpose-Locked Escrow Receipt
+====================================================
+Date / Time:     ${new Date().toLocaleString()}
+Escrow Session:  ${escrowRecord.escrow_id || escrowRecord.id || "EZR-8F32A1"}
+PayPal Order ID: ${escrowRecord.paypal_order_id || "PAYPAL-SANDBOX-DEMO"}
+Status:          ${escrowRecord.status || "HELD"}
+
+----------------------------------------------------
+SENDER & PURPOSE DETAILS
+----------------------------------------------------
+Sender Name:     ${sessionName || "Demo Sender"}
+Sender Email:    ${sessionEmail || "demo@ezri.africa"}
+Purpose Tag:     ${escrowRecord.tag || "SCHOOL"}
+Note:            ${escrowRecord.note || "Purpose-locked remittance"}
+
+----------------------------------------------------
+FINANCIAL BREAKDOWN
+----------------------------------------------------
+Transfer Amount: $${amount.toFixed(2)} USD
+Ezri Fee (2%):   $${fee.toFixed(2)} USD
+Total Charged:   $${total.toFixed(2)} USD
+
+Exchange Rate:   1 USD = 192.00 LRD
+Local Payout:    ${lrd.toLocaleString()} LRD
+
+----------------------------------------------------
+RECEIVER CLAIM INSTRUCTIONS
+----------------------------------------------------
+Claim Link:      ${typeof window !== "undefined" ? window.location.origin : ""}/claim/${escrowRecord.escrow_id || escrowRecord.id || "EZR-8F32A1"}
+
+Steps for Receiver:
+1. Open the claim link in any browser.
+2. Select your receiving provider (Mobile Money or Commercial Bank).
+3. Upload your invoice / bill photo proof for Vision AI inspection.
+4. Mobile money payout is disbursed automatically upon verification.
+
+====================================================
+      Protected by PayPal Escrow & OpenRouter AI
+====================================================
+`;
+
+  const blob = new Blob([slip], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Ezri-Remittance-Slip-${escrowRecord.escrow_id || escrowRecord.id || "EZR"}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ── Live agent activity panel ── */
 function AgentActivityCard({ run }: { run: { title: string; steps: AgentStep[] } }) {
   return (
     <div className="flex justify-start">
@@ -131,7 +199,7 @@ function AgentActivityCard({ run }: { run: { title: string; steps: AgentStep[] }
   );
 }
 
-/* ── Approval gate — the agent always pauses before money moves ── */
+/* ── Approval gate ── */
 function ApprovalCard({
   approval,
   pinStage,
@@ -237,7 +305,7 @@ function ApprovalCard({
   );
 }
 
-/* ── Chat message with embedded Step 1 card ── */
+/* ── Chat message item ── */
 function ChatMessageItem({
   msg,
   sessionName,
@@ -266,7 +334,7 @@ function ChatMessageItem({
         >
           {msg.text}
 
-          {/* Step 1 card: confirm transfer + purpose lock (before any money moves) */}
+          {/* Step 1 card */}
           {msg.card?.kind === "setup" && (
             <div className="mt-3 rounded-2xl border border-brand-300 bg-brand-50/70 p-4 text-foreground text-xs flex flex-col gap-3">
               <div className="flex items-center justify-between border-b border-brand-200 pb-2 font-bold">
@@ -359,6 +427,9 @@ export default function PlugPage() {
   const [copied, setCopied] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
+  // AI Speech Read-back State (DISABLED BY DEFAULT - requires user approval)
+  const [speechEnabled, setSpeechEnabled] = useState(false);
+
   // Live agent activity + approval gates
   const [agentRun, setAgentRun] = useState<{ title: string; steps: AgentStep[] } | null>(null);
   const [approval, setApproval] = useState<{ amount: number; tag: string } | null>(null);
@@ -368,16 +439,36 @@ export default function PlugPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SPEECH_KEY);
+      if (stored === "true") setSpeechEnabled(true);
+    } catch {}
+  }, []);
+
+  function toggleSpeech() {
+    setSpeechEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SPEECH_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  }
+
   const say = useCallback((text: string, cardData?: any, chipsList?: string[]) => {
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setMessages((m) => [...m, { id, role: "assistant", text, time: now(), card: cardData, chips: chipsList }]);
     if (chipsList) setChips(chipsList);
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "en-US";
-      window.speechSynthesis?.speak(u);
-    } catch {}
-  }, []);
+
+    if (speechEnabled) {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "en-US";
+        window.speechSynthesis?.speak(u);
+      } catch {}
+    }
+  }, [speechEnabled]);
 
   const initWelcome = useCallback((s: Session) => {
     const welcomeText = `${greeting()}, ${s.name || "Demo Sender"}\n\nPurpose-Locked Remittance\nPayPal foreign collection → AI purpose lock → Strict proof check → Mobile Money disburse\n\nLive FX Rate: 1 USD = ${USD_LRD} LRD\nService fee: ${FEE_PCT_LABEL}% per transfer — always shown for your approval before money moves`;
@@ -419,7 +510,6 @@ export default function PlugPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, agentRun, approval, escrow]);
 
-  /** Advance the live agent steps one by one (like watching AI code). */
   async function advanceSteps(total: number, ms: number) {
     for (let i = 0; i < total; i++) {
       await sleep(ms);
@@ -447,8 +537,6 @@ export default function PlugPage() {
     setInput("");
     setSending(true);
 
-    // Pick the visible agent trail: money steps only for real transfer-shaped
-    // messages, otherwise a conversational trail (no fraud/purpose theater).
     const looksLikeTransfer =
       /\b(send|sends|transfer|transfers|pay|pays|remit|top-?up|wire|move)\b/i.test(cmdText) &&
       /[$]|\b\d+(?:\.\d+)?\b/.test(cmdText);
@@ -473,7 +561,6 @@ export default function PlugPage() {
       setAgentRun(null);
       const intent = j.intent || "transfer";
       if (intent !== "transfer") {
-        // Conversational answer — no money card, no escrow, nothing locked.
         setParsed(null);
         say(
           j.reply ||
@@ -512,14 +599,12 @@ export default function PlugPage() {
     say("Captured & HELD in PayPal sandbox escrow. Share the claim link below with the receiver.");
   }
 
-  /** Step 2 request — the agent NEVER moves money here; it pauses for approval. */
   function requestPay() {
     if (!session) {
       router.push("/login");
       return;
     }
     if (!parsed) {
-      // No transfer has been discussed yet — never invent one.
       say(
         "We haven't set up a transfer yet. Tell me what to send first — for example “Send $60 to mom for school” — and I'll show the full breakdown before anything moves.",
         undefined,
@@ -535,7 +620,6 @@ export default function PlugPage() {
     say("Paused before moving money. Review the approval request below — you are always in control.");
   }
 
-  /** After approval + correct PIN, the agent runs the money movement live. */
   async function executePay() {
     if (pin !== DEMO_PIN) {
       setPinError("Wrong PIN. Your demo PIN is 1234.");
@@ -634,7 +718,7 @@ export default function PlugPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex flex-col h-full min-h-0 w-full flex-1 overflow-hidden bg-background relative">
       {/* Header Bar */}
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-surface px-3 py-2 sm:px-4 sm:py-3 z-10">
         <div className="flex items-center gap-2">
@@ -651,6 +735,22 @@ export default function PlugPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* SPEAKER READ-BACK TOGGLE BUTTON (Muted by default) */}
+          <button
+            type="button"
+            onClick={toggleSpeech}
+            aria-label={speechEnabled ? "Mute AI Voice" : "Approve & Enable AI Voice Read-Back"}
+            title={speechEnabled ? "AI Voice Active (Click to Mute)" : "Enable AI Voice Read-Back"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+              speechEnabled
+                ? "bg-brand-50 border-brand-300 text-brand-700 shadow-2xs"
+                : "bg-surface border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {speechEnabled ? <Volume2 className="size-4 text-brand-600 animate-pulse" /> : <VolumeX className="size-4" />}
+            <span className="hidden min-[450px]:inline">{speechEnabled ? "Voice Active" : "Muted"}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -682,10 +782,10 @@ export default function PlugPage() {
           />
         ))}
 
-        {/* Live agent activity — visible while the AI works */}
+        {/* Live agent activity */}
         {agentRun && <AgentActivityCard run={agentRun} />}
 
-        {/* Approval gate — agent stops here before any money movement */}
+        {/* Approval gate */}
         {approval && (
           <ApprovalCard
             approval={approval}
@@ -707,7 +807,7 @@ export default function PlugPage() {
           />
         )}
 
-        {/* Step 2 card: escrow session + claim link + PayPal approval */}
+        {/* Step 2 card: escrow session + claim link + PayPal approval + Download Slip button */}
         {escrow && (
           <div className="flex justify-start">
             <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
@@ -765,6 +865,16 @@ export default function PlugPage() {
                       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                       {copied ? "Copied" : "Copy Link"}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadRemittanceSlip(escrow, session?.name || "Sender", session?.email || "")
+                      }
+                      className="btn btn-secondary shrink-0 gap-1 btn-sm"
+                      title="Download Invoice Slip"
+                    >
+                      <Download className="size-3.5" /> Slip
+                    </button>
                     <a
                       href={`/claim/${escrow.escrow_id}`}
                       target="_blank"
@@ -790,98 +900,11 @@ export default function PlugPage() {
             </div>
           </div>
         )}
-
-        {/* Step 3 card — final lock summary, only at the end of the transaction */}
-        {escrow && (escrow.status === "HELD" || escrow.status === "RELEASED") && (
-          <div className="flex justify-start">
-            <div className="w-full max-w-full sm:max-w-[85%] flex flex-col gap-1">
-              <div className="flex items-center gap-2 px-1 text-xs font-bold text-muted-foreground">
-                <span>Ezri AI</span>
-                <span className="text-xs text-muted-foreground/70">{now()}</span>
-              </div>
-              <div className="rounded-2xl border border-brand-300 bg-brand-50/70 p-4 text-foreground text-xs flex flex-col gap-3">
-                <div className="flex items-center justify-between border-b border-brand-200 pb-2 font-bold">
-                  <span className="text-brand-700 flex items-center gap-1 text-sm">
-                    <Lock className="size-4" /> Locked for {parsed?.tag || "GENERAL"}
-                  </span>
-                  <span className="text-base font-extrabold">${parsed?.amount_usd ?? 60} USD</span>
-                </div>
-
-                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-muted-foreground block font-semibold">Payout Total</span>
-                    <span className="font-extrabold text-foreground">
-                      {Number(
-                        parsed?.fx_lrd ?? lrdOf(Number(parsed?.amount_usd ?? 60)),
-                      ).toLocaleString()}{" "}
-                      LRD
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block font-semibold">Fraud Risk Assessment</span>
-                    <span className={`font-extrabold ${(parsed?.fraud_score ?? 10) >= 50 ? "text-danger" : "text-annita-green-dark"}`}>
-                      {parsed?.fraud_score ?? 10}/100{(parsed?.fraud_score ?? 10) < 50 ? " (Safe)" : ""}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block font-semibold">
-                      Ezri fee ({FEE_PCT_LABEL}%)
-                    </span>
-                    <span className="font-extrabold text-foreground">
-                      $
-                      {(Number(parsed?.fee_usd) > 0
-                        ? Number(parsed?.fee_usd)
-                        : feeOf(Number(parsed?.amount_usd ?? 60))
-                      ).toFixed(2)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block font-semibold">Sender charged</span>
-                    <span className="font-extrabold text-foreground">
-                      $
-                      {totalOf(Number(parsed?.amount_usd ?? 60)).toFixed(2)} USD
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-brand-200 pt-2 text-xs">
-                  <span className="font-bold text-foreground">Escrow Status</span>
-                  <span className={statusBadge(escrow.status)}>{escrow.status}</span>
-                </div>
-
-                {escrow.status === "RELEASED" && (
-                  <div className="rounded-xl border border-brand-200 bg-surface px-3 py-2 font-mono text-xs font-bold">
-                    {escrow.provider} · MoMo Ref: {escrow.mock_momo_txn_id || "—"}
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {escrow.status === "HELD"
-                    ? "Funds are held in PayPal sandbox escrow. Money moves only after the receiver's proof passes."
-                    : "Transaction complete. Mobile money released to the receiver."}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Typing indicator (hidden while the live agent card is showing) */}
-        {sending && !agentRun && (
-          <div className="flex justify-start">
-            <div className="bg-surface border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-2xs">
-              <div className="flex gap-1.5 items-center">
-                <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: "300ms" }} />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Quick Action Chips (always visible above input) */}
+      {/* Quick Action Chips */}
       {chips.length > 0 && (
-        <div className="px-3 pb-2 flex flex-wrap gap-2 shrink-0 sm:px-4 sm:pb-2.5 sm:gap-2.5 bg-background">
+        <div className="px-3 pb-2 flex gap-2 overflow-x-auto scrollbar-hide shrink-0 min-w-0 sm:px-4 sm:pb-2.5 sm:gap-2.5 bg-background">
           {chips.map((chip) => (
             <button
               key={chip}
@@ -895,12 +918,11 @@ export default function PlugPage() {
         </div>
       )}
 
-      {/* Chat Input Bar — fixed flex position, never jumps */}
-      <div className="shrink-0 bg-surface px-3 pt-2 pb-3 border-t border-border">
+      {/* Sticky Chat Input Bar */}
+      <div className="sticky bottom-0 left-0 right-0 z-20 bg-surface px-3 pt-2 pb-3 shrink-0 border-t border-border shadow-md">
         <div className="flex items-end gap-2 max-w-full overflow-hidden">
           {/* Pill container */}
           <div className="flex-1 flex items-center bg-muted/60 rounded-full min-h-[44px] max-h-[44px] px-2 py-1.5 border border-border overflow-hidden min-w-0">
-            {/* Audio Lines button */}
             <button
               type="button"
               onClick={handleRecordTap}
@@ -911,7 +933,6 @@ export default function PlugPage() {
               <AudioLines className="h-5 w-5" />
             </button>
 
-            {/* Text input */}
             <input
               type="text"
               value={input}
@@ -926,7 +947,6 @@ export default function PlugPage() {
               className="flex-1 bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 min-w-0 w-full"
             />
 
-            {/* Mic record button */}
             <button
               type="button"
               onClick={handleRecordTap}
@@ -936,7 +956,6 @@ export default function PlugPage() {
             </button>
           </div>
 
-          {/* Send circle button */}
           <button
             type="button"
             onClick={() => void sendText()}

@@ -1,15 +1,53 @@
-"""SQLite ledger — HELD -> RELEASED / REFUNDED. Stdlib only, same escrow idea as AnnitaPlug."""
+"""Prisma Postgres / PostgreSQL / SQLite Dual Ledger — HELD -> RELEASED / REFUNDED.
+Connects to Prisma Postgres via DATABASE_URL when set, falls back to SQLite locally.
+"""
 from __future__ import annotations
 import os
 import sqlite3
 import time
 import uuid
+import hashlib
+import secrets
 
 from ai_guard import FEE_PCT  # single source of truth: 2% platform fee
 
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL", "").strip()
 DB = os.environ.get("EZRI_DB", os.path.join(os.path.dirname(__file__), "ezri.db"))
 
-SCHEMA = """
+POSTGRES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS escrows(
+  id VARCHAR(80) PRIMARY KEY,
+  amount_usd DOUBLE PRECISION NOT NULL,
+  fee_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+  tag VARCHAR(80) NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  recipient VARCHAR(100) NOT NULL DEFAULT 'mom',
+  status VARCHAR(40) NOT NULL DEFAULT 'DRAFT',
+  paypal_order_id VARCHAR(120) NOT NULL DEFAULT '',
+  paypal_capture_id VARCHAR(120) NOT NULL DEFAULT '',
+  provider VARCHAR(100) NOT NULL DEFAULT '',
+  provider_number VARCHAR(100) NOT NULL DEFAULT '',
+  verdict VARCHAR(40) NOT NULL DEFAULT '',
+  verdict_reason TEXT NOT NULL DEFAULT '',
+  mock_momo_txn_id VARCHAR(120) NOT NULL DEFAULT '',
+  sender_email VARCHAR(120) NOT NULL DEFAULT '',
+  created_at DOUBLE PRECISION NOT NULL,
+  expires_at DOUBLE PRECISION NOT NULL
+);
+CREATE TABLE IF NOT EXISTS users(
+  email VARCHAR(120) PRIMARY KEY,
+  name VARCHAR(120) NOT NULL DEFAULT '',
+  pw_hash TEXT NOT NULL,
+  created_at DOUBLE PRECISION NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions(
+  token VARCHAR(120) PRIMARY KEY,
+  email VARCHAR(120) NOT NULL,
+  created_at DOUBLE PRECISION NOT NULL
+);
+"""
+
+SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS escrows(
   id TEXT PRIMARY KEY,
   amount_usd REAL NOT NULL,
@@ -42,11 +80,27 @@ CREATE TABLE IF NOT EXISTS sessions(
 );
 """
 
+_pg_initialized = False
 
-def _db() -> sqlite3.Connection:
+
+def _get_pg_conn():
+    import psycopg2
+    import psycopg2.extras
+
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn.autocommit = True
+    global _pg_initialized
+    if not _pg_initialized:
+        with conn.cursor() as cur:
+            cur.execute(POSTGRES_SCHEMA)
+        _pg_initialized = True
+    return conn
+
+
+def _get_sqlite_conn() -> sqlite3.Connection:
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
-    con.executescript(SCHEMA)
+    con.executescript(SQLITE_SCHEMA)
     for ddl in (
         "ALTER TABLE escrows ADD COLUMN sender_email TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE escrows ADD COLUMN fee_usd REAL NOT NULL DEFAULT 0",
@@ -58,22 +112,45 @@ def _db() -> sqlite3.Connection:
     return con
 
 
+def _execute(query_sqlite: str, params: tuple = ()) -> list[dict]:
+    if DATABASE_URL:
+        try:
+            query_pg = query_sqlite.replace("?", "%s")
+            conn = _get_pg_conn()
+            with conn.cursor() as cur:
+                cur.execute(query_pg, params)
+                if cur.description:
+                    rows = cur.fetchall()
+                    return [dict(r) for r in rows]
+            conn.close()
+            return []
+        except Exception as e:
+            print(f"[PostgreSQL Error] {e} — falling back to SQLite")
+
+    # SQLite fallback
+    with _get_sqlite_conn() as con:
+        cur = con.execute(query_sqlite, params)
+        if query_sqlite.strip().upper().startswith("SELECT"):
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+        con.commit()
+        return []
+
+
 def create_escrow(amount_usd: float, tag: str, note: str, recipient: str, expiry_minutes: int, sender_email: str = "") -> dict:
     now = time.time()
     eid = "EZR-" + uuid.uuid4().hex[:8].upper()
-    fee_usd = round(amount_usd * FEE_PCT, 2)  # Ezri takes 2% of every transaction
-    with _db() as con:
-        con.execute(
-            "INSERT INTO escrows(id,amount_usd,fee_usd,tag,note,recipient,status,sender_email,created_at,expires_at) VALUES(?,?,?,?,?,?,'DRAFT',?,?,?)",
-            (eid, amount_usd, fee_usd, tag, note, recipient, sender_email, now, now + expiry_minutes * 60),
-        )
+    fee_usd = round(amount_usd * FEE_PCT, 2)
+    _execute(
+        "INSERT INTO escrows(id,amount_usd,fee_usd,tag,note,recipient,status,sender_email,created_at,expires_at) VALUES(?,?,?,?,?,?,'DRAFT',?,?,?)",
+        (eid, amount_usd, fee_usd, tag, note, recipient, sender_email, now, now + expiry_minutes * 60),
+    )
     return get_escrow(eid)
 
 
 def get_escrow(eid: str) -> dict:
-    with _db() as con:
-        row = con.execute("SELECT * FROM escrows WHERE id=?", (eid,)).fetchone()
-    return dict(row) if row else {}
+    rows = _execute("SELECT * FROM escrows WHERE id=?", (eid,))
+    return rows[0] if rows else {}
 
 
 def update_escrow(eid: str, **fields) -> dict:
@@ -81,26 +158,21 @@ def update_escrow(eid: str, **fields) -> dict:
         return get_escrow(eid)
     cols = ", ".join(f"{k}=?" for k in fields)
     vals = list(fields.values()) + [eid]
-    with _db() as con:
-        con.execute(f"UPDATE escrows SET {cols} WHERE id=?", vals)
+    _execute(f"UPDATE escrows SET {cols} WHERE id=?", tuple(vals))
     return get_escrow(eid)
 
 
 def list_escrows(limit: int = 100) -> list[dict]:
-    with _db() as con:
-        rows = con.execute("SELECT * FROM escrows ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
-    return [dict(r) for r in rows]
+    rows = _execute("SELECT * FROM escrows ORDER BY created_at DESC LIMIT ?", (limit,))
+    return rows
 
 
 def find_by_capture(capture_id: str) -> dict:
-    with _db() as con:
-        row = con.execute("SELECT * FROM escrows WHERE paypal_capture_id=?", (capture_id,)).fetchone()
-    return dict(row) if row else {}
+    rows = _execute("SELECT * FROM escrows WHERE paypal_capture_id=?", (capture_id,))
+    return rows[0] if rows else {}
 
 
-# ---- sender auth (demo-grade: pbkdf2 + opaque tokens, no new deps) ----
-import hashlib
-import secrets
+# ---- Sender Auth (PBKDF2 + Opaque Tokens) ----
 
 def _hash(password: str, salt_hex: str = "") -> str:
     salt = bytes.fromhex(salt_hex) if salt_hex else secrets.token_bytes(16)
@@ -112,22 +184,22 @@ def create_user(name: str, email: str, password: str) -> dict | None:
     email = email.strip().lower()
     if not email or len(password) < 4:
         return None
-    with _db() as con:
-        if con.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
-            return None
-        con.execute(
-            "INSERT INTO users(email,name,pw_hash,created_at) VALUES(?,?,?,?)",
-            (email, name.strip()[:80], _hash(password), time.time()),
-        )
+    existing = _execute("SELECT email FROM users WHERE email=?", (email,))
+    if existing:
+        return None
+    _execute(
+        "INSERT INTO users(email,name,pw_hash,created_at) VALUES(?,?,?,?)",
+        (email, name.strip()[:80], _hash(password), time.time()),
+    )
     return {"email": email, "name": name.strip()[:80]}
 
 
 def verify_user(email: str, password: str) -> dict | None:
     email = email.strip().lower()
-    with _db() as con:
-        row = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
-    if not row:
+    rows = _execute("SELECT * FROM users WHERE email=?", (email,))
+    if not rows:
         return None
+    row = rows[0]
     try:
         salt_hex, _ = row["pw_hash"].split("$", 1)
     except ValueError:
@@ -138,21 +210,17 @@ def verify_user(email: str, password: str) -> dict | None:
 
 
 def get_user(email: str) -> dict | None:
-    """Lookup without checking the password — demo login accepts any credentials."""
     email = email.strip().lower()
-    with _db() as con:
-        row = con.execute("SELECT email,name FROM users WHERE email=?", (email,)).fetchone()
-    return {"email": row["email"], "name": row["name"]} if row else None
+    rows = _execute("SELECT email,name FROM users WHERE email=?", (email,))
+    return {"email": rows[0]["email"], "name": rows[0]["name"]} if rows else None
 
 
 def create_session(email: str) -> str:
     token = "ezk_" + secrets.token_hex(24)
-    with _db() as con:
-        con.execute("INSERT INTO sessions(token,email,created_at) VALUES(?,?,?)", (token, email, time.time()))
+    _execute("INSERT INTO sessions(token,email,created_at) VALUES(?,?,?)", (token, email, time.time()))
     return token
 
 
 def get_session_email(token: str) -> str:
-    with _db() as con:
-        row = con.execute("SELECT email FROM sessions WHERE token=?", (token,)).fetchone()
-    return row["email"] if row else ""
+    rows = _execute("SELECT email FROM sessions WHERE token=?", (token,))
+    return rows[0]["email"] if rows else ""

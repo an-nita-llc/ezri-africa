@@ -1,7 +1,7 @@
 import {
+  CreditCard,
   Download,
   History,
-  Lock,
   LogIn,
   MessageSquare,
   Settings,
@@ -14,23 +14,20 @@ export type NavItem = {
   icon: typeof MessageSquare;
 };
 
-/** Bottom nav — exactly 4 items, shown only when signed in. */
 export const mobileNavItems: NavItem[] = [
   { href: "/", label: "AI Chat", icon: MessageSquare },
-  { href: "/dashboard", label: "Ledger", icon: History },
+  { href: "/virtual-card", label: "Card", icon: CreditCard },
   { href: "/claim", label: "Claim", icon: Download },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "Ledger", icon: History },
+  { href: "/purpose-lock", label: "Settings", icon: Settings },
 ];
 
 export const sidebarNavItems: NavItem[] = [
   { href: "/", label: "AI Chat & Send", icon: MessageSquare },
-  { href: "/dashboard", label: "Transfers Ledger", icon: History },
+  { href: "/virtual-card", label: "Ezri Virtual Card", icon: CreditCard },
   { href: "/claim", label: "Claim Transfer", icon: Download },
-  { href: "/settings", label: "App Settings", icon: Settings },
-  { href: "/purpose-lock", label: "Purpose Lock Config", icon: Lock },
-];
-
-export const signedOutNavItems: NavItem[] = [
+  { href: "/dashboard", label: "Transfers Ledger", icon: History },
+  { href: "/purpose-lock", label: "Settings & Lock", icon: Settings },
   { href: "/login", label: "Sign in", icon: LogIn },
   { href: "/signup", label: "Sign up", icon: UserPlus },
 ];

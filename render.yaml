@@ -10,18 +10,27 @@ services:
         value: https://api-m.sandbox.paypal.com
       - key: DEMO_EXPIRY_MINUTES
         value: 10
-      # After first deploy, add in dashboard: CORS_ALLOWED_ORIGINS (web URL),
-      # PAYPAL_CLIENT_ID / PAYPAL_SECRET (sandbox), OPENROUTER_API_KEY (optional),
-      # NOTIFY_WEBHOOK_URL (Zapier Catch Hook for escrow event notifications).
+      - key: DATABASE_URL
+        sync: false # Prisma Postgres pooled URL — set in Render dashboard, never commit
+      - key: REDIS_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: CLOUDFLARE_R2_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_R2_BUCKET_NAME
+        sync: false
   - type: web
     name: ezri-web
     runtime: node
     buildCommand: "cd web && corepack enable && pnpm install --frozen-lockfile && pnpm run build"
-    # Must bind Render's dynamic $PORT (package.json start hardcodes 3000 for local dev).
     startCommand: "cd web && ./node_modules/.bin/next start -p $PORT"
     envVars:
       - key: NODE_VERSION
         value: 22
-    # Set in Render dashboard BEFORE (re)deploy — baked at build time:
-    # NEXT_PUBLIC_API_URL=https://ezri-api.onrender.com
-    # CORS_ALLOWED_ORIGINS (on ezri-api) must then allow https://ezri-web.onrender.com

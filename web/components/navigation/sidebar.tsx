@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { LogOut, ShieldCheck } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { clearSession, loadSession, type Session } from "@/app/session";
-import { sidebarNavItems, signedOutNavItems } from "./nav-items";
+import { sidebarNavItems } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -29,7 +29,9 @@ export function Sidebar() {
     router.refresh();
   }
 
-  const items = session ? sidebarNavItems : signedOutNavItems;
+  const items = session
+    ? sidebarNavItems.filter((i) => i.href !== "/login" && i.href !== "/signup")
+    : sidebarNavItems;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-surface md:flex">
