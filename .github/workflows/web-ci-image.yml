@@ -72,6 +72,28 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Prove the published image actually boots and serves before Render
+      # ever pulls it. A green build alone does not guarantee a runnable
+      # standalone bundle (copied .next/static + public paths).
+      - name: Smoke-test the runtime image
+        run: |
+          IMAGE="ghcr.io/an-nita-llc/ezri-web:sha-${GITHUB_SHA}"
+          docker pull "$IMAGE"
+          docker image inspect --format='image size: {{.Size}} bytes' "$IMAGE"
+          docker run --rm -d --name ezri-web-smoke -p 3000:3000 -e PORT=3000 "$IMAGE"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              echo "Runtime smoke test passed."
+              docker stop ezri-web-smoke
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Runtime smoke test failed; container logs:"
+          docker logs ezri-web-smoke
+          docker stop ezri-web-smoke
+          exit 1
+
       # Optional: add the Render deploy hook as a repository secret to make
       # Render pull the fresh image automatically. Without it, trigger a
       # manual deploy in the Render dashboard after CI turns green.
