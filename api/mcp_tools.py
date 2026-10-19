@@ -19,6 +19,10 @@ from __future__ import annotations
 
 import os
 
+from env_loader import load_env
+
+load_env()  # local .env support -- before ledger/paypal/ai_guard read env
+
 from mcp.server.fastmcp import FastMCP
 
 from ai_guard import FEE_PCT, fee_of, parse_intent

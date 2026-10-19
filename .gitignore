@@ -1,13 +1,26 @@
+# Environment files -- never commit real secrets.
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Python
 __pycache__/
 *.pyc
-*.tsbuildinfo
+.pytest_cache/
+
+# Node / Next.js
 node_modules/
 .next/
 dist/
+*.tsbuildinfo
+
+# Local databases and artifacts
 *.db
 *.sqlite
-.env
+*.db-journal
 uploads/
-.DS_Store
+
+# IDE / OS
 .idea/
-.pytest_cache/
+.DS_Store

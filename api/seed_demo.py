@@ -3,6 +3,11 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
+
+from env_loader import load_env
+
+load_env()
+
 db = os.path.join(os.path.dirname(__file__), "ezri.db")
 if os.path.exists(db):
     os.remove(db)

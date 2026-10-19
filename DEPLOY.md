@@ -133,6 +133,27 @@ attached, so it remains a safe fallback for the demo.
   explicitly — the code defaults point at the deployed production URLs.
 - Do not commit `.next/`, `node_modules/`, or build artifacts.
 
+## Local environment (`.env`)
+
+Both env files are gitignored; templates are committed.
+
+```powershell
+Copy-Item .env.example .env                 # API gateway keys
+Copy-Item web/.env.example web/.env.local   # Next.js keys
+```
+
+- The API loads the repo-root `.env` automatically (`api/env_loader.py`,
+  python-dotenv) **without overriding** real process env — so Render dashboard
+  values always win and this file is invisible in production.
+- The web reads `web/.env.local`; `NEXT_PUBLIC_*` values are inlined at
+  dev/build start, so restart `pnpm dev` after editing.
+- `GET /api/health` reports what the gateway actually picked up:
+  `db` (`postgres` / `sqlite`), `ai_guard` (`openrouter` / `heuristic`),
+  `mock_paypal`, and `notify_webhook`. Use it to confirm keys without
+  exposing secrets.
+- With every secret blank the gateway still runs the full zero-key demo:
+  mock PayPal, SQLite, heuristic AI guard.
+
 ## Fallback: Git-backed Node service (currently live)
 
 The current deployment at `https://ezri-africa.onrender.com` uses this path.

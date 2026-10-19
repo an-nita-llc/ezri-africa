@@ -10,9 +10,14 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from ai_guard import FEE_PCT, fee_of, parse_intent, strict_proof_check
+from env_loader import load_env
+
+load_env()  # local .env support -- must run before ledger/paypal/ai_guard imports
+
+from ai_guard import FEE_PCT, OPENROUTER_KEY, fee_of, parse_intent, strict_proof_check
 from notify import emit, emit_raw, webhook_url
 from ledger import (
+    DATABASE_URL as LEDGER_DATABASE_URL,
     create_card, create_escrow, create_session, create_user, delete_card, delete_otp,
     find_by_capture, get_card, get_escrow, get_otp, get_prefs, get_reset, get_session_email,
     get_user, list_cards, list_escrows, list_events, save_otp, save_prefs, save_reset,
@@ -67,6 +72,8 @@ def health() -> dict:
     return {
         "ok": True,
         "mock_paypal": MOCK,
+        "db": "postgres" if LEDGER_DATABASE_URL else "sqlite",
+        "ai_guard": "openrouter" if OPENROUTER_KEY else "heuristic",
         "expiry_minutes": EXPIRY_MIN,
         "fee_pct": FEE_PCT,  # Ezri platform fee: 2% of every transaction
         "fx_lrd": 194.50,

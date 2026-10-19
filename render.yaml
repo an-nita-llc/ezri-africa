@@ -22,21 +22,11 @@ services:
       - key: DEMO_EXPIRY_MINUTES
         value: 10
       - key: DATABASE_URL
-        sync: false # Prisma Postgres pooled URL — set in Render dashboard, never commit
-      - key: REDIS_URL
-        sync: false
-      - key: UPSTASH_REDIS_REST_URL
-        sync: false
-      - key: UPSTASH_REDIS_REST_TOKEN
-        sync: false
-      - key: CLOUDFLARE_R2_ACCOUNT_ID
-        sync: false
-      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
-        sync: false
-      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: CLOUDFLARE_R2_BUCKET_NAME
-        sync: false
+        sync: false # Neon/Prisma Postgres URL -- set in Render dashboard, never commit
+      - key: NOTIFY_WEBHOOK_URL
+        sync: false # Zapier Catch Hook -- empty = events only in the local log
+      - key: WEB_BASE_URL
+        value: https://ezri-africa.com
   - type: web
     name: ezri-web
     runtime: image
