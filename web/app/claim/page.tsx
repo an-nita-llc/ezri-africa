@@ -272,7 +272,7 @@ export default function ClaimHubPage() {
         setLoading(false);
       });
     } catch {
-      setSession({ token: "demo-token", email: "demo@ezri.africa", name: "Demo Receiver" });
+      setSession({ token: "demo-token", email: "demo@ezri-africa.com", name: "Demo Receiver" });
       setLoading(false);
     }
     return () => {

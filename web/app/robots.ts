@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/api/", "/_next/"],
     },
-    sitemap: "https://ezri.africa/sitemap.xml",
+    sitemap: "https://ezri-africa.com/sitemap.xml",
   };
 }

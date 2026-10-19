@@ -124,7 +124,7 @@ def auth_demo(body: DemoIn | None = None) -> dict:
 
     if not email:
         # One-tap path — canonical judge identity.
-        email, name = "demo@ezri.africa", "Demo Sender"
+        email, name = "demo@ezri-africa.com", "Demo Sender"
     if not name:
         name = _name_from_email(email)
     if len(password) < 4:
@@ -135,7 +135,7 @@ def auth_demo(body: DemoIn | None = None) -> dict:
         user = create_user(name, email, password) or get_user(email)
     if not user:
         # Safety net: fall back to the canonical demo sender.
-        email, name, password = "demo@ezri.africa", "Demo Sender", "demo1234"
+        email, name, password = "demo@ezri-africa.com", "Demo Sender", "demo1234"
         create_user(name, email, password)
         user = verify_user(email, password)
     assert user is not None

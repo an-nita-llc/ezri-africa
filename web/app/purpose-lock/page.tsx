@@ -139,7 +139,7 @@ export default function PurposeLockPage() {
       }
       setSession(s);
       setProfileName(s.name || "Demo Sender");
-      setProfileEmail(s.email || "demo@ezri.africa");
+      setProfileEmail(s.email || "demo@ezri-africa.com");
 
       try {
         const stored = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<ApprovalPrefs>;

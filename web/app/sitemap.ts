@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://ezri.africa";
+  const baseUrl = "https://ezri-africa.com";
   const now = new Date();
 
   return [

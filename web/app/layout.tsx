@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://ezri.africa"),
+  metadataBase: new URL("https://ezri-africa.com"),
   title: {
     default: "Ezri Africa — Purpose-Locked P2P Remittance & AI Escrow Platform",
     template: "%s · Ezri Africa",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     "Ezri Africa",
     "Annita LLC",
   ],
-  authors: [{ name: "Annita LLC", url: "https://ezri.africa" }],
+  authors: [{ name: "Annita LLC", url: "https://ezri-africa.com" }],
   creator: "Annita LLC",
   publisher: "Ezri Africa",
   robots: {
@@ -57,15 +57,15 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: "https://ezri.africa",
+    canonical: "https://ezri-africa.com",
     languages: {
-      "en-US": "https://ezri.africa",
-      "en-LR": "https://ezri.africa",
-      "en-GH": "https://ezri.africa",
-      "en-NG": "https://ezri.africa",
-      "fr-SN": "https://ezri.africa",
-      "fr-CI": "https://ezri.africa",
-      "sw-KE": "https://ezri.africa",
+      "en-US": "https://ezri-africa.com",
+      "en-LR": "https://ezri-africa.com",
+      "en-GH": "https://ezri-africa.com",
+      "en-NG": "https://ezri-africa.com",
+      "fr-SN": "https://ezri-africa.com",
+      "fr-CI": "https://ezri-africa.com",
+      "sw-KE": "https://ezri-africa.com",
     },
   },
   icons: {
@@ -81,11 +81,11 @@ export const metadata: Metadata = {
     title: "Ezri Africa — Purpose-Locked Remittance & AI Escrow Platform",
     description:
       "Cross-border payments built for Africa. PayPal collects abroad in US/EU; OpenRouter AI locks purpose; local mobile money pays out across 15 African nations.",
-    url: "https://ezri.africa",
+    url: "https://ezri-africa.com",
     siteName: "Ezri Africa",
     images: [
       {
-        url: "https://ezri.africa/brand/annita-logo.png",
+        url: "https://ezri-africa.com/brand/annita-logo.png",
         width: 1200,
         height: 630,
         alt: "Ezri Africa Purpose Locked Remittance",
@@ -99,7 +99,7 @@ export const metadata: Metadata = {
     title: "Ezri Africa — Purpose-Locked Remittance Platform",
     description:
       "Send money to Africa for a purpose. Protected by PayPal Escrow & OpenRouter AI.",
-    images: ["https://ezri.africa/brand/annita-logo.png"],
+    images: ["https://ezri-africa.com/brand/annita-logo.png"],
   },
   other: {
     "geo.region": "LR, GH, NG, SN, KE, ZA, CI, TZ, UG, RW, ET, EG, ZW, SL, GM",

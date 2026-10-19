@@ -85,7 +85,7 @@ async def proxy_signup(body: AuthIn):
 
 @app.post("/api/auth/demo")
 async def proxy_demo(body: AuthIn | None = None):
-    email = (body.email if body else "demo@ezri.africa") or "demo@ezri.africa"
+    email = (body.email if body else "demo@ezri-africa.com") or "demo@ezri-africa.com"
     name = (body.name if body else "Demo Sender") or "Demo Sender"
     async with httpx.AsyncClient(timeout=8.0) as client:
         try:

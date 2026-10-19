@@ -21,4 +21,4 @@ Allow: /
 User-agent: Yandex
 Allow: /
 
-Sitemap: https://ezri.africa/sitemap.xml
+Sitemap: https://ezri-africa.com/sitemap.xml

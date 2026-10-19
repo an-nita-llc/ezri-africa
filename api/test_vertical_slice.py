@@ -75,7 +75,7 @@ def test_auth_signup_login_me_demo():
     assert me.json()["email"] == "john@x.com"
     assert c.get("/api/auth/me").status_code == 401
     dm = c.post("/api/auth/demo")
-    assert dm.json()["user"]["email"] == "demo@ezri.africa"
+    assert dm.json()["user"]["email"] == "demo@ezri-africa.com"
     cr = c.post("/api/escrow/create", json={"amount_usd": 10, "tag": "GENERAL", "note": "t", "recipient": "mom"},
                 headers={"Authorization": f"Bearer {token}"})
     assert c.get(f"/api/escrow/{cr.json()['escrow_id']}").json()["sender_email"] == "john@x.com"

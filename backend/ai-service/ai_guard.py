@@ -73,7 +73,7 @@ async def parse_intent_openrouter(text: str, note: str = "") -> dict:
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": os.environ.get("OPENROUTER_SITE_URL", "https://ezri.africa"),
+        "HTTP-Referer": os.environ.get("OPENROUTER_SITE_URL", "https://ezri-africa.com"),
         "X-Title": os.environ.get("OPENROUTER_SITE_NAME", "Ezri Africa"),
         "Content-Type": "application/json",
     }

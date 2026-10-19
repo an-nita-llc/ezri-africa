@@ -121,7 +121,7 @@ Status:          ${escrowRecord.status || "HELD"}
 SENDER & PURPOSE DETAILS
 ----------------------------------------------------
 Sender Name:     ${sessionName || "Demo Sender"}
-Sender Email:    ${sessionEmail || "demo@ezri.africa"}
+Sender Email:    ${sessionEmail || "demo@ezri-africa.com"}
 Purpose Tag:     ${escrowRecord.tag || "SCHOOL"}
 Note:            ${escrowRecord.note || "Purpose-locked remittance"}
 

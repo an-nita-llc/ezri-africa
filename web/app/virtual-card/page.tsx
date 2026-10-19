@@ -81,7 +81,7 @@ export default function VirtualCardPage() {
         setLoading(false);
       });
     } catch {
-      setSession({ token: "demo-token", email: "demo@ezri.africa", name: "Demo Sender" });
+      setSession({ token: "demo-token", email: "demo@ezri-africa.com", name: "Demo Sender" });
       setLoading(false);
     }
     return () => {

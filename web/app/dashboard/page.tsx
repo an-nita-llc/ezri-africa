@@ -214,7 +214,7 @@ function downloadRemittanceSlipAsImage(escrowRecord: any, sessionName: string, s
   ctx.font = "13px sans-serif";
   ctx.fillText(`Sender Name: ${sessionName || "Demo Sender"}`, 50, y);
   y += 20;
-  ctx.fillText(`Sender Email: ${sessionEmail || "demo@ezri.africa"}`, 50, y);
+  ctx.fillText(`Sender Email: ${sessionEmail || "demo@ezri-africa.com"}`, 50, y);
   y += 20;
   ctx.fillText(`Purpose Lock Tag: ${tag}`, 50, y);
   y += 20;

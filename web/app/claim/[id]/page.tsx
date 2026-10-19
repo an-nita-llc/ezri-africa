@@ -223,7 +223,7 @@ export default function ClaimPage() {
         void loadEscrow();
       });
     } catch {
-      setSession({ token: "demo-token", email: "demo@ezri.africa", name: "Demo Receiver" });
+      setSession({ token: "demo-token", email: "demo@ezri-africa.com", name: "Demo Receiver" });
       setSessionLoading(false);
       void loadEscrow();
     }
