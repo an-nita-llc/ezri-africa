@@ -3,6 +3,8 @@ services:
     name: ezri-api
     runtime: python
     plan: free
+    domains:
+      - api.ezri-africa.com
     buildCommand: "pip install -r api/requirements.txt"
     startCommand: "uvicorn server:app --app-dir api --host 0.0.0.0 --port $PORT"
     healthCheckPath: /api/health

@@ -68,7 +68,7 @@ jobs:
             ghcr.io/an-nita-llc/ezri-web:latest
             ghcr.io/an-nita-llc/ezri-web:sha-${{ github.sha }}
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'https://ezri-api.onrender.com' }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'https://api.ezri-africa.com' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

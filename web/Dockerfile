@@ -16,7 +16,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 # NEXT_PUBLIC_* values are inlined into the client bundle at build time.
-ARG NEXT_PUBLIC_API_URL=https://ezri-api.onrender.com
+ARG NEXT_PUBLIC_API_URL=https://api.ezri-africa.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 # Only the image build uses standalone output; the Git-backed Render

@@ -67,15 +67,21 @@ Apply `render.yaml` as a Blueprint, or create them manually:
 
 ### 4. Point the web build at the API
 
-`NEXT_PUBLIC_API_URL` is inlined into the client bundle at build time. Set a
-repository variable (**Settings → Secrets and variables → Actions → Variables**):
+`NEXT_PUBLIC_API_URL` is inlined into the client bundle at build time. The
+API is served at `https://api.ezri-africa.com`.
+
+- **Git-backed Node service** (currently live): set the variable in Render →
+  web service → **Environment**, then redeploy — a rebuild is required so the
+  value gets inlined.
+- **Image path**: set this repository variable
+  (**Settings → Secrets and variables → Actions → Variables**):
 
 ```
-NEXT_PUBLIC_API_URL = https://ezri-api.onrender.com
+NEXT_PUBLIC_API_URL = https://api.ezri-africa.com
 ```
 
-If your API service has a different name, set the real URL. Changing it
-requires a new image build (push to `main`, or re-run the workflow).
+Changing it requires a new image build (push to `main`, or re-run the
+workflow). The raw `ezri-api.onrender.com` URL keeps working as a fallback.
 
 ### 5. Optional: auto-deploy after a green build
 
@@ -113,6 +119,20 @@ CNAME, and confirm it loads. Only then move the main records.
 4. Set the API's `CORS_ALLOWED_ORIGINS` to
    `https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com`.
 5. Set `NEXT_PUBLIC_API_URL` to the API's URL and redeploy the web service.
+
+### API subdomain: api.ezri-africa.com
+
+1. Render → `ezri-api` → **Settings → Custom Domains** → add
+   `api.ezri-africa.com`. Render displays the CNAME target
+   (`ezri-api.onrender.com`).
+2. Cloudflare DNS → add `api` **CNAME** → the target Render shows,
+   **DNS only (grey cloud)**, so Render can issue the certificate.
+3. Wait for Render to report it verified with an active certificate, then
+   test `https://api.ezri-africa.com/api/health`.
+
+The API stays reachable at `https://ezri-api.onrender.com` as a fallback.
+Hobby workspaces include 2 custom domains; if the web service already uses
+both, Render charges $0.25/month for the API subdomain.
 
 The `https://ezri-africa.onrender.com` URL keeps working after the domain is
 attached, so it remains a safe fallback for the demo.
