@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, CreditCard, Fingerprint, Globe, KeyRound, Loader2, Lock, Plane, ShieldCheck, Wallet, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard, Fingerprint, KeyRound, Loader2, Lock, ShieldCheck, Wallet, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authButtonClass, authInputClass } from "@/components/auth/classes";
@@ -9,6 +9,7 @@ import { PasswordField } from "@/components/auth/password-field";
 import { loadSession, saveSession } from "./session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
+const ADMIN_EMAILS = ["admin@ezri.africa", "admin@ezri.com", "admin@annita.com"];
 
 function ErrorAlert({ message }: { message: string }) {
   return (
@@ -27,7 +28,13 @@ function useRedirectIfAuthed() {
   useEffect(() => {
     let alive = true;
     void loadSession().then((s) => {
-      if (s && alive) router.replace("/");
+      if (s && alive) {
+        if (s.role === "ADMIN") {
+          router.replace("/admin");
+        } else {
+          router.replace("/");
+        }
+      }
     });
     return () => {
       alive = false;
@@ -35,19 +42,7 @@ function useRedirectIfAuthed() {
   }, [router]);
 }
 
-async function post(
-  path: string,
-  body?: object,
-): Promise<{
-  ok: boolean;
-  detail?: string;
-  token?: string;
-  user?: { email: string; name: string };
-  demo_token?: string | null;
-  reset_url?: string | null;
-  expires_in_minutes?: number;
-  delivered?: boolean;
-}> {
+async function post(path: string, body?: object): Promise<{ ok: boolean; detail?: string; token?: string; user?: { email: string; name: string }; demo_token?: string | null }> {
   const r = await fetch(`${API}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -65,6 +60,33 @@ export function LoginForm() {
   const [pending, setPending] = useState(false);
   useRedirectIfAuthed();
 
+  const isAdminEmail = ADMIN_EMAILS.includes(email.trim().toLowerCase());
+
+  async function handleAdminOtpRequest() {
+    const typedEmail = email.trim().toLowerCase();
+    if (!isAdminEmail) return;
+
+    setPending(true);
+    setError(null);
+    try {
+      const r = await fetch(`${API}/api/auth/otp/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: typedEmail, is_admin: true }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setError(j.detail || "Only authorized admin emails can receive admin verification codes.");
+        setPending(false);
+        return;
+      }
+      router.push(`/verify-otp?email=${encodeURIComponent(typedEmail)}&next=/admin`);
+    } catch {
+      setError("Unable to request admin verification code.");
+      setPending(false);
+    }
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -75,7 +97,7 @@ export function LoginForm() {
     }
     setPending(true);
     try {
-      let session: { token: string; email: string; name: string } | null = null;
+      let session: { token: string; email: string; name: string; role?: "ADMIN" | "USER" } | null = null;
       const j = await post("/api/auth/login", { email: typedEmail, password });
       if (j.token && j.user) {
         session = { token: j.token, email: j.user.email, name: j.user.name };
@@ -95,7 +117,7 @@ export function LoginForm() {
       }
       await saveSession(session);
       const next = searchParams.get("next");
-      const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      const dest = session.role === "ADMIN" || isAdminEmail ? "/admin" : (next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
       router.push(dest);
       router.refresh();
     } catch {
@@ -121,10 +143,30 @@ export function LoginForm() {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@example.com"
+          placeholder="you@example.com or admin@ezri.africa"
           className={authInputClass}
         />
       </div>
+
+      {isAdminEmail && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-brand-300 bg-brand-50/80 p-4 shadow-sm animate-modal-in">
+          <div className="flex items-center gap-2 text-xs font-bold text-brand-800 uppercase tracking-wider">
+            <ShieldCheck className="size-4 text-brand-600" /> Ezri Admin Email Detected
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Admin access detected for <strong className="text-foreground">{email}</strong>. Request an exclusive Admin Verification Code to enter the Admin Management Portal.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleAdminOtpRequest()}
+            disabled={pending}
+            className="btn btn-primary btn-block gap-2 text-xs font-bold shadow-md"
+          >
+            {pending ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+            Request Admin Verification Code (OTP)
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <PasswordField
@@ -152,7 +194,7 @@ export function LoginForm() {
             Signing you in…
           </>
         ) : (
-          "Sign in"
+          isAdminEmail ? "Sign in as Admin" : "Sign in"
         )}
       </button>
       <p className="text-center text-xs leading-5 text-muted-foreground">
@@ -393,17 +435,14 @@ const AFRICAN_PROVIDERS = [
 export function SignupForm() {
   const router = useRouter();
 
-  // Step 1: Location Base Choice
   const [regionType, setRegionType] = useState<"DIASPORA" | "AFRICA">("DIASPORA");
 
-  // Step 2: Country & Provider
   const [diasporaCountry, setDiasporaCountry] = useState("United States");
   const [diasporaProvider, setDiasporaProvider] = useState("PayPal Sandbox Escrow (Default)");
 
   const [africanCountry, setAfricanCountry] = useState("Liberia");
   const [africanProvider, setAfricanProvider] = useState("MTN Mobile Money");
 
-  // Step 3: User Details
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
@@ -411,7 +450,6 @@ export function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [pin, setPin] = useState("1234");
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -484,7 +522,6 @@ export function SignupForm() {
     <div className="flex flex-col gap-5">
       {error ? <ErrorAlert message={error} /> : null}
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
-        {/* Region Base Choice */}
         <div className="flex flex-col gap-2 rounded-2xl bg-muted/50 p-3 border border-border">
           <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Where are you currently based?
@@ -493,31 +530,28 @@ export function SignupForm() {
             <button
               type="button"
               onClick={() => setRegionType("DIASPORA")}
-              className={`inline-flex items-center justify-center gap-1.5 py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
+              className={`py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
                 regionType === "DIASPORA"
                   ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs ring-2 ring-brand-500/20"
                   : "border-border bg-surface text-foreground hover:bg-muted"
               }`}
             >
-              <Plane aria-hidden="true" className="size-3.5" />
               Diaspora Abroad (Sender)
             </button>
             <button
               type="button"
               onClick={() => setRegionType("AFRICA")}
-              className={`inline-flex items-center justify-center gap-1.5 py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
+              className={`py-3 px-2 text-xs font-bold rounded-xl border text-center transition-all ${
                 regionType === "AFRICA"
                   ? "border-brand-600 bg-brand-50 text-brand-700 shadow-2xs ring-2 ring-brand-500/20"
                   : "border-border bg-surface text-foreground hover:bg-muted"
               }`}
             >
-              <Globe aria-hidden="true" className="size-3.5" />
               Based in Africa (Receiver)
             </button>
           </div>
         </div>
 
-        {/* Country & Provider Selection based on Region */}
         {regionType === "DIASPORA" ? (
           <>
             <div className="flex flex-col gap-1.5">

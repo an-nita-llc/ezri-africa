@@ -464,8 +464,8 @@ export default function PurposeLockPage() {
           checked={strictProof}
           onChange={setStrictProof}
           icon={ShieldCheck}
-          label="Strict Vision AI receipt check"
-          hint="AI inspects the bill photo for purpose keywords, legibility and amount window before releasing mobile money."
+          label="Strict receipt proof check"
+          hint="The proof guard checks the bill photo for purpose keywords, legibility and amount window before releasing mobile money."
         />
         <Toggle
           checked={requirePhoto}

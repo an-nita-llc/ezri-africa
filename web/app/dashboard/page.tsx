@@ -154,7 +154,7 @@ function downloadRemittanceSlipAsImage(escrowRecord: any, sessionName: string, s
   const amount = escrowRecord.amount_usd || 60;
   const fee = escrowRecord.fee_usd || feeOf(amount);
   const total = amount + fee;
-  const lrd = amount * 192;
+  const lrd = lrdOf(amount);
   const eid = escrowRecord.escrow_id || escrowRecord.id || "EZR-8F32A1";
   const tag = escrowRecord.tag || "SCHOOL";
   const note = escrowRecord.note || "Purpose-locked remittance";
@@ -249,7 +249,7 @@ function downloadRemittanceSlipAsImage(escrowRecord: any, sessionName: string, s
 
   ctx.fillStyle = "#0b4d8f";
   ctx.font = "bold 13px sans-serif";
-  ctx.fillText(`Exchange Rate: 1 USD = 192.00 LRD`, 50, y);
+  ctx.fillText(`Exchange Rate: 1 USD = ${USD_LRD.toFixed(2)} LRD`, 50, y);
   y += 20;
 
   ctx.fillStyle = "#007a3d";
@@ -282,15 +282,15 @@ function downloadRemittanceSlipAsImage(escrowRecord: any, sessionName: string, s
   y += 20;
   ctx.fillText("2. Select receiving provider (Mobile Money or Bank Wire).", 50, y);
   y += 20;
-  ctx.fillText("3. Upload bill or receipt photo for Vision AI inspection.", 50, y);
+  ctx.fillText("3. Upload bill or receipt photo for deterministic proof inspection.", 50, y);
   y += 20;
-  ctx.fillText("4. Payout is disbursed automatically upon AI PASS.", 50, y);
+  ctx.fillText("4. Payout is disbursed automatically upon proof PASS.", 50, y);
 
   // Footer
   ctx.fillStyle = "#94a3b8";
   ctx.font = "11px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Protected by PayPal Sandbox Escrow & OpenRouter AI Engine", 300, 765);
+  ctx.fillText("Protected by PayPal Sandbox Escrow & deterministic proof guard", 300, 765);
 
   const link = document.createElement("a");
   link.download = `Ezri-Remittance-Receipt-${eid}.png`;

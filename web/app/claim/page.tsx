@@ -17,6 +17,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
+import { USD_LRD } from "../fx";
 import { loadSession, type Session } from "../session";
 
 type Currency = {
@@ -47,7 +48,7 @@ const ALL_AFRICAN_COUNTRIES: CountryConfig[] = [
     name: "Liberia",
     phonePrefix: "+231",
     currencies: [
-      { code: "LRD", name: "Liberian Dollar", rate: 192.0, symbol: "L$" },
+      { code: "LRD", name: "Liberian Dollar", rate: USD_LRD, symbol: "L$" },
       { code: "USD", name: "US Dollar (Dual Currency)", rate: 1.0, symbol: "$" },
     ],
     wallets: [

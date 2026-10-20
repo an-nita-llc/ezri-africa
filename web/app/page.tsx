@@ -29,6 +29,7 @@ import Link from "next/link";
 import PayPalButtons from "./PayPalButtons";
 import { FEE_PCT_LABEL, USD_LRD, feeOf, lrdOf, totalOf } from "./fx";
 import { authHeaders, loadSession, type Session } from "./session";
+import { downloadRemittanceSlipAsImage } from "@/components/receipt/download-slip";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
 const PP_CID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
@@ -98,68 +99,6 @@ function statusBadge(status: string) {
   if (status === "HELD") return `${base}bg-brand-100 text-brand-900 border border-brand-300`;
   if (status === "NEEDS_RETRY" || status === "EXPIRED") return `${base}bg-danger/10 text-danger border border-danger/30`;
   return `${base}bg-muted text-muted-foreground border border-border`;
-}
-
-function downloadRemittanceSlip(escrowRecord: any, sessionName: string, sessionEmail: string) {
-  if (!escrowRecord) return;
-  const amount = escrowRecord.amount_usd || 60;
-  const fee = escrowRecord.fee_usd || feeOf(amount);
-  const total = amount + fee;
-  const lrd = amount * 192;
-
-  const slip = `
-====================================================
-           EZRI AFRICA — REMITTANCE SLIP
-            Purpose-Locked Escrow Receipt
-====================================================
-Date / Time:     ${new Date().toLocaleString()}
-Escrow Session:  ${escrowRecord.escrow_id || escrowRecord.id || "EZR-8F32A1"}
-PayPal Order ID: ${escrowRecord.paypal_order_id || "PAYPAL-SANDBOX-DEMO"}
-Status:          ${escrowRecord.status || "HELD"}
-
-----------------------------------------------------
-SENDER & PURPOSE DETAILS
-----------------------------------------------------
-Sender Name:     ${sessionName || "Demo Sender"}
-Sender Email:    ${sessionEmail || "demo@ezri-africa.com"}
-Purpose Tag:     ${escrowRecord.tag || "SCHOOL"}
-Note:            ${escrowRecord.note || "Purpose-locked remittance"}
-
-----------------------------------------------------
-FINANCIAL BREAKDOWN
-----------------------------------------------------
-Transfer Amount: $${amount.toFixed(2)} USD
-Ezri Fee (2%):   $${fee.toFixed(2)} USD
-Total Charged:   $${total.toFixed(2)} USD
-
-Exchange Rate:   1 USD = 192.00 LRD
-Local Payout:    ${lrd.toLocaleString()} LRD
-
-----------------------------------------------------
-RECEIVER CLAIM INSTRUCTIONS
-----------------------------------------------------
-Claim Link:      ${typeof window !== "undefined" ? window.location.origin : ""}/claim/${escrowRecord.escrow_id || escrowRecord.id || "EZR-8F32A1"}
-
-Steps for Receiver:
-1. Open the claim link in any browser.
-2. Select your receiving provider (Mobile Money or Commercial Bank).
-3. Upload your invoice / bill photo proof for Vision AI inspection.
-4. Mobile money payout is disbursed automatically upon verification.
-
-====================================================
-      Protected by PayPal Escrow & OpenRouter AI
-====================================================
-`;
-
-  const blob = new Blob([slip], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Ezri-Remittance-Slip-${escrowRecord.escrow_id || escrowRecord.id || "EZR"}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 /* ── Live agent activity panel ── */
@@ -427,10 +366,8 @@ export default function PlugPage() {
   const [copied, setCopied] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
-  // AI Speech Read-back State (DISABLED BY DEFAULT - requires user approval)
   const [speechEnabled, setSpeechEnabled] = useState(false);
 
-  // Live agent activity + approval gates
   const [agentRun, setAgentRun] = useState<{ title: string; steps: AgentStep[] } | null>(null);
   const [approval, setApproval] = useState<{ amount: number; tag: string } | null>(null);
   const [pinStage, setPinStage] = useState(false);
@@ -712,7 +649,7 @@ export default function PlugPage() {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
         <Sparkles className="size-8 text-brand-600 motion-safe:animate-bounce" />
-        <p className="text-sm font-semibold text-muted-foreground">Initializing OpenRouter AI Engine…</p>
+        <p className="text-sm font-semibold text-muted-foreground">Initializing OpenRouter intent engine…</p>
       </div>
     );
   }
@@ -730,12 +667,11 @@ export default function PlugPage() {
               Remittance AI
               <Sparkles className="size-3.5 text-brand-600" />
             </h1>
-            <p className="text-xs text-muted-foreground">OpenRouter AI Engine</p>
+            <p className="text-xs text-muted-foreground">OpenRouter intent engine</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* SPEAKER READ-BACK TOGGLE BUTTON (Muted by default) */}
           <button
             type="button"
             onClick={toggleSpeech}
@@ -782,10 +718,8 @@ export default function PlugPage() {
           />
         ))}
 
-        {/* Live agent activity */}
         {agentRun && <AgentActivityCard run={agentRun} />}
 
-        {/* Approval gate */}
         {approval && (
           <ApprovalCard
             approval={approval}
@@ -868,10 +802,10 @@ export default function PlugPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        downloadRemittanceSlip(escrow, session?.name || "Sender", session?.email || "")
+                        downloadRemittanceSlipAsImage(escrow, session?.name || "Sender", session?.email || "")
                       }
                       className="btn btn-secondary shrink-0 gap-1 btn-sm"
-                      title="Download Invoice Slip"
+                      title="Download Image Receipt Slip"
                     >
                       <Download className="size-3.5" /> Slip
                     </button>
@@ -902,7 +836,6 @@ export default function PlugPage() {
         )}
       </div>
 
-      {/* Quick Action Chips */}
       {chips.length > 0 && (
         <div className="px-3 pb-2 flex gap-2 overflow-x-auto scrollbar-hide shrink-0 min-w-0 sm:px-4 sm:pb-2.5 sm:gap-2.5 bg-background">
           {chips.map((chip) => (
@@ -918,10 +851,8 @@ export default function PlugPage() {
         </div>
       )}
 
-      {/* Sticky Chat Input Bar */}
       <div className="sticky bottom-0 left-0 right-0 z-20 bg-surface px-3 pt-2 pb-3 shrink-0 border-t border-border shadow-md">
         <div className="flex items-end gap-2 max-w-full overflow-hidden">
-          {/* Pill container */}
           <div className="flex-1 flex items-center bg-muted/60 rounded-full min-h-[44px] max-h-[44px] px-2 py-1.5 border border-border overflow-hidden min-w-0">
             <button
               type="button"

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { Modal } from "@/components/ui/modal";
+import { USD_LRD } from "../fx";
 import { authHeaders, loadSession, type Session } from "../session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
@@ -454,7 +455,7 @@ export default function VirtualCardPage() {
                   </span>
                   <p className="text-3xl font-extrabold text-foreground mt-0.5">${activeCard.balance.toFixed(2)} USD</p>
                   <p className="text-xs text-muted-foreground font-semibold">
-                    ≈ {(activeCard.balance * 192).toLocaleString()} LRD
+                    ≈ {(activeCard.balance * USD_LRD).toLocaleString()} LRD
                   </p>
                 </div>
                 <div className="flex size-11 items-center justify-center rounded-2xl bg-[#003868] text-white shadow-xs">

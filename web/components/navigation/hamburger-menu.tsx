@@ -11,16 +11,19 @@ import {
   Download,
   History,
   Languages,
+  LayoutDashboard,
   Lock,
   LogIn,
   LogOut,
   Menu,
   MessageSquare,
   Mic,
+  Settings,
   ShieldCheck,
   Sliders,
   Type,
   UserPlus,
+  Users,
   Volume2,
   VolumeX,
   X,
@@ -107,6 +110,8 @@ export function HamburgerMenu({
     router.refresh();
   }
 
+  const isAdmin = pathname.startsWith("/admin") || session?.role === "ADMIN";
+
   const menuContent = (
     <div
       className="fixed inset-0 z-[200] flex justify-end bg-annita-navy-950/70 backdrop-blur-xl animate-overlay-in font-sans"
@@ -138,6 +143,11 @@ export function HamburgerMenu({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-foreground">{session.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{session.email}</p>
+                {isAdmin && (
+                  <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700 border border-brand-200">
+                    <ShieldCheck className="size-3" /> Root Administrator
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -148,75 +158,155 @@ export function HamburgerMenu({
           {/* Navigation Links */}
           <div>
             <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
-              Navigation
+              {isAdmin ? "Admin Control Navigation" : "Navigation"}
             </p>
-            <ul className="flex flex-col gap-1.5">
-              <li>
-                <Link
-                  href="/"
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
-                    pathname === "/"
-                      ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <MessageSquare className="size-5 text-brand-600" />
-                  <span>AI Chat & Send</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/virtual-card"
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
-                    pathname === "/virtual-card"
-                      ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <CreditCard className="size-5 text-brand-600" />
-                  <span>Ezri Virtual Card</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/claim"
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
-                    pathname.startsWith("/claim")
-                      ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Download className="size-5 text-brand-600" />
-                  <span>Claim Transfer</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/purpose-lock"
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
-                    pathname === "/purpose-lock"
-                      ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Lock className="size-5 text-brand-600" />
-                  <span>Purpose Lock Config</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/dashboard"
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
-                    pathname === "/dashboard"
-                      ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <History className="size-5 text-brand-600" />
-                  <span>Transfers Ledger</span>
-                </Link>
-              </li>
-            </ul>
+
+            {isAdmin ? (
+              <ul className="flex flex-col gap-1.5">
+                <li>
+                  <Link
+                    href="/admin"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/admin"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <LayoutDashboard className="size-5 text-brand-600" />
+                    <span>Admin Dashboard</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/admin/users"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/admin/users"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Users className="size-5 text-brand-600" />
+                    <span>User Management</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/admin/escrows"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/admin/escrows"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Lock className="size-5 text-brand-600" />
+                    <span>Escrow Control</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/admin/virtual-cards"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/admin/virtual-cards"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <CreditCard className="size-5 text-brand-600" />
+                    <span>Virtual Cards Vault</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/admin/settings"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/admin/settings"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Settings className="size-5 text-brand-600" />
+                    <span>Platform Config</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/"
+                    className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-muted-foreground hover:bg-muted transition-all border border-dashed border-border mt-2"
+                  >
+                    <MessageSquare className="size-5 text-brand-600" />
+                    <span>Switch to Sender App</span>
+                  </Link>
+                </li>
+              </ul>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                <li>
+                  <Link
+                    href="/"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <MessageSquare className="size-5 text-brand-600" />
+                    <span>AI Chat & Send</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/virtual-card"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/virtual-card"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <CreditCard className="size-5 text-brand-600" />
+                    <span>Ezri Virtual Card</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/claim"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname.startsWith("/claim")
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Download className="size-5 text-brand-600" />
+                    <span>Claim Transfer</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/purpose-lock"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/purpose-lock"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Lock className="size-5 text-brand-600" />
+                    <span>Purpose Lock Config</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/dashboard"
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                      pathname === "/dashboard"
+                        ? "bg-brand-50 text-brand-700 border border-brand-200 shadow-2xs"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <History className="size-5 text-brand-600" />
+                    <span>Transfers Ledger</span>
+                  </Link>
+                </li>
+              </ul>
+            )}
           </div>
 
           {/* Preferences & Accessibility Card */}
@@ -329,7 +419,7 @@ export function HamburgerMenu({
               OpenRouter AI Escrow Guard
             </p>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Multi-model OpenRouter AI intent engine with strict receipt check before mobile money disburse.
+              Multi-model OpenRouter intent engine with a deterministic receipt proof guard before mobile money disburse.
             </p>
           </div>
         </div>

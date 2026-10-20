@@ -6,10 +6,10 @@ import { useEffect, useState } from "react";
 import { LogOut, ShieldCheck } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { clearSession, loadSession, type Session } from "@/app/session";
-import { sidebarNavItems } from "./nav-items";
+import { adminSidebarNavItems, sidebarNavItems } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
+  if (href === "/" || href === "/admin") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -29,21 +29,25 @@ export function Sidebar() {
     router.refresh();
   }
 
-  const items = session
+  const isAdminRoute = pathname.startsWith("/admin") || session?.role === "ADMIN";
+
+  const items = isAdminRoute
+    ? adminSidebarNavItems
+    : session
     ? sidebarNavItems.filter((i) => i.href !== "/login" && i.href !== "/signup")
     : sidebarNavItems;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-surface md:flex">
       <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-        <Link href="/" aria-label="Ezri Africa home">
+        <Link href={isAdminRoute ? "/admin" : "/"} aria-label="Ezri Africa home">
           <LogoMark size="sm" />
         </Link>
         <Link
-          href="/"
+          href={isAdminRoute ? "/admin" : "/"}
           className="text-lg font-bold tracking-tight text-foreground"
         >
-          Ezri Africa
+          {isAdminRoute ? "Ezri Admin Portal" : "Ezri Africa"}
         </Link>
       </div>
       <nav aria-label="Primary" className="flex-1 overflow-y-auto px-3 py-4">
@@ -75,6 +79,11 @@ export function Sidebar() {
           <div className="mb-2 px-2 text-xs text-muted-foreground">
             <span className="block font-medium text-foreground truncate">{session.name}</span>
             <span className="block truncate">{session.email}</span>
+            {isAdminRoute && (
+              <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700 border border-brand-200">
+                <ShieldCheck className="size-3" /> Root Admin
+              </span>
+            )}
           </div>
           <button
             type="button"

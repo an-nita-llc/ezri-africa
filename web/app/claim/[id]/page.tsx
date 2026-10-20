@@ -28,6 +28,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { USD_LRD } from "../../fx";
 import { loadSession, type Session } from "../../session";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.ezri-africa.com";
@@ -60,7 +61,7 @@ const COUNTRIES: CountryConfig[] = [
     name: "Liberia",
     phonePrefix: "+231",
     currencies: [
-      { code: "LRD", name: "Liberian Dollar", rate: 192.0, symbol: "L$" },
+      { code: "LRD", name: "Liberian Dollar", rate: USD_LRD, symbol: "L$" },
       { code: "USD", name: "US Dollar (Dual Currency)", rate: 1.0, symbol: "$" },
     ],
     wallets: [
@@ -412,7 +413,7 @@ export default function ClaimPage() {
             </div>
             <div>
               <h2 className="text-lg font-extrabold text-emerald-950">Payout Successfully Disbursed</h2>
-              <p className="text-xs font-semibold text-emerald-800">Verified by Vision AI Engine</p>
+              <p className="text-xs font-semibold text-emerald-800">Verified by deterministic proof guard</p>
             </div>
           </div>
 
@@ -614,7 +615,7 @@ export default function ClaimPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-bold text-foreground">{file?.name}</p>
                   <p className="text-[11px] text-muted-foreground font-mono">
-                    {file ? (file.size / 1024).toFixed(1) : 0} KB · Ready for Vision AI
+                    {file ? (file.size / 1024).toFixed(1) : 0} KB · Ready for proof check
                   </p>
                 </div>
                 <button

@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { loadSession, type Session } from "@/app/session";
-import { mobileNavItems } from "./nav-items";
+import { adminMobileNavItems, mobileNavItems } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
+  if (href === "/" || href === "/admin") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -19,13 +19,16 @@ export function BottomNav() {
     void loadSession().then(setSession);
   }, [pathname]);
 
+  const isAdminRoute = pathname.startsWith("/admin") || session?.role === "ADMIN";
+  const items = isAdminRoute ? adminMobileNavItems : mobileNavItems;
+
   return (
     <nav
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden backdrop-blur-lg bg-surface/95"
     >
       <ul className="grid grid-cols-5">
-        {mobileNavItems.map((item) => {
+        {items.map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
           return (
