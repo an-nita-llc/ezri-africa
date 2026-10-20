@@ -60,9 +60,11 @@ Tracks: **Social Impact (primary)** · **Money Movement (secondary)**.
 > Next.js 16 / React 19 / TypeScript / Tailwind on the web; FastAPI + Python on
 > the API; PayPal Orders v2 with capture/refund (deterministic mock fallback);
 > deterministic heuristic AI guard (OpenRouter optional); PBKDF2 + opaque
-> session tokens; SQLite locally / PostgreSQL (Neon or Prisma Postgres) in
-> production; AG Grid for the ledger; Render for hosting; Postman/OpenAPI for
-> the API surface; GitHub Actions for the production image build.
+> session tokens; SQLite locally / dual Postgres in production (Neon primary +
+> Prisma secondary, mirrored writes and automatic failover); an Upstash Redis
+> read cache in front of every ledger read; AG Grid for the ledger; Render for
+> hosting; Postman/OpenAPI for the API surface; GitHub Actions for the
+> production image build.
 
 **Challenges we ran into**
 > - Proving purpose without punishing the receiver: a strict checklist, a clear
@@ -78,8 +80,9 @@ Tracks: **Social Impact (primary)** · **Money Movement (secondary)**.
 > - The full production flow works end to end: parse → escrow → capture →
 >   proof → release/refund, verified live on ezri-africa.com.
 > - Judges can run the entire demo with no accounts and no keys.
-> - Real persistence for profile, cards, preferences and events once
->   `DATABASE_URL` is set — no localStorage-only demos.
+> - Real persistence for profile, cards, preferences and events, mirrored
+>   across Neon + Prisma Postgres with automatic failover and an Upstash read
+>   cache — no localStorage-only demos.
 
 **What we learned**
 > Purpose locks only work when the receiving side is a first-class user. The
@@ -96,8 +99,8 @@ Tracks: **Social Impact (primary)** · **Money Movement (secondary)**.
 
 **Built with**
 > Next.js, React, TypeScript, Tailwind CSS, AG Grid, FastAPI, Python, Pydantic,
-> PostgreSQL, Neon, Render, Postman, PayPal, OpenRouter, Zapier, Docker,
-> GitHub Actions.
+> PostgreSQL, Neon, Prisma Postgres, Upstash Redis, Render, Postman, PayPal,
+> OpenRouter, Zapier, Docker, GitHub Actions.
 
 ---
 
@@ -141,16 +144,31 @@ Thumbnail: logo mark on navy with the line **"Proof Before Payout"** —
 
 ## 4. What Chris must provide (the only human inputs left)
 
-### A. `DATABASE_URL` — persistent PostgreSQL (≈5 min, free)
+### A. `DATABASE_URL` + `DATABASE_URL_SECONDARY` — dual PostgreSQL (≈8 min, free)
 
-Without it the API falls back to SQLite, which **wipes on every Render
+Without them the API falls back to SQLite, which **wipes on every Render
 redeploy** (escrows, users, cards, prefs, events).
 
-1. Create a free project at <https://neon.tech> (or use Prisma Postgres).
-2. Copy the connection string — it must end with `?sslmode=require`.
+1. Create a free project at <https://neon.tech>; copy the pooled connection
+   string (must end with `?sslmode=require`). This is `DATABASE_URL`.
+2. Copy Neon's direct URL into `DATABASE_URL_UNPOOLED` for one-time schema init.
+3. Create a free project at <https://console.prisma.io>; copy the pooled
+   `postgres://…@pooled.db.prisma.io:5432/postgres?sslmode=require` string into
+   `DATABASE_URL_SECONDARY`. The API mirrors writes to both and fails over.
+4. Render → **ezri-api** → Environment → add all three. Save → redeploy.
+5. Verify `/api/health` shows `db_mode: "dual"` and both targets `up`; create
+   a transfer, redeploy, and confirm it survives.
+
+### A2. Upstash Redis read cache (optional, ≈3 min, free)
+
+The API works without it (per-process memory cache), but a shared cache keeps
+both databases from being hammered and survives multiple Render instances.
+
+1. Create a free Redis DB at <https://console.upstash.com/redis>.
+2. Open **REST API** and copy the URL + token.
 3. Render → **ezri-api** → Environment → add
-   `DATABASE_URL = postgresql://…neon.tech/…?sslmode=require`.
-4. Save → Render redeploys. Verify: create a transfer, redeploy, data survives.
+   `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+4. Save → redeploy. `/api/health` flips `cache` to `"upstash"`.
 
 ### B. `NOTIFY_WEBHOOK_URL` — real OTP/reset email + Telegram/SMS via Zapier
 

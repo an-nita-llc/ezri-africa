@@ -1,6 +1,9 @@
 # Ezri Africa — AI Microservice Engine
 
-> **Role:** Decoupled AI Microservice powering OpenRouter multi-model LLM inference, risk scoring, and Vision receipt inspection.
+> **Status:** Optional/legacy microservice. The live gateway (`api/server.py`)
+> uses the deterministic proof guard in `api/ai_guard.py` for receipt
+> decisions; it does not call this service.
+> **Role:** Decoupled AI Microservice powering OpenRouter multi-model LLM inference, risk scoring, and optional receipt inspection.
 > **Port:** `8001`
 
 ---

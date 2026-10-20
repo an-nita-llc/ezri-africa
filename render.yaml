@@ -22,9 +22,37 @@ services:
       - key: DEMO_EXPIRY_MINUTES
         value: 10
       - key: DATABASE_URL
-        sync: false # Neon/Prisma Postgres URL -- set in Render dashboard, never commit
+        sync: false # primary Postgres (Neon pooled) -- Render dashboard only
       - key: DATABASE_URL_UNPOOLED
         sync: false # optional direct Neon URL for schema initialization
+      - key: DATABASE_URL_SECONDARY
+        sync: false # secondary Postgres (Prisma pooled) -- automatic failover
+      - key: DB_MIRROR_WRITES
+        value: "true"
+      - key: DB_CONNECT_TIMEOUT
+        value: "5"
+      - key: DB_STATEMENT_TIMEOUT_MS
+        value: "3000"
+      - key: DB_FAILURE_COOLDOWN_SECONDS
+        value: "30"
+      - key: DB_SLOW_MS
+        value: "3000"
+      - key: DB_POOL_MIN
+        value: "1"
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false # Upstash REST URL -- empty = in-process memory cache
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false # Upstash REST token
+      - key: DB_CACHE_ENABLED
+        value: "true"
+      - key: DB_READ_CACHE_TTL
+        value: "30"
+      - key: SESSION_CACHE_TTL
+        value: "600"
+      - key: USER_CACHE_TTL
+        value: "60"
       - key: OPENROUTER_MODELS
         value: deepseek/deepseek-chat,qwen/qwen-2.5-72b-instruct
       - key: NOTIFY_WEBHOOK_URL

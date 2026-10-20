@@ -10,6 +10,11 @@ import os
 # Never let the suite touch real infrastructure or send real webhooks.
 os.environ["DATABASE_URL"] = ""
 os.environ["DATABASE_URL_UNPOOLED"] = ""
+os.environ["DATABASE_URL_SECONDARY"] = ""
+os.environ["DATABASE_URL_SECONDARY_UNPOOLED"] = ""
 os.environ["POSTGRES_URL"] = ""
 os.environ["OPENROUTER_API_KEY"] = ""
 os.environ["NOTIFY_WEBHOOK_URL"] = ""
+os.environ["UPSTASH_REDIS_REST_URL"] = ""
+os.environ["UPSTASH_REDIS_REST_TOKEN"] = ""
+os.environ["DB_CACHE_ENABLED"] = "false"

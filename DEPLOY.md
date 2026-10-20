@@ -61,8 +61,10 @@ Apply `render.yaml` as a Blueprint, or create them manually:
   `an-nita.com` and the site's calls are blocked by the browser.
 - Everything else is optional — with **zero keys** the API runs in full demo
   mode: mock PayPal, SQLite storage, in-process cache, heuristic AI guard.
-  Set `DATABASE_URL` (Prisma Postgres) only if you want data to survive
-  restarts and redeploys. PayPal/Upstash/R2/OpenRouter values come from
+  Set `DATABASE_URL` (Neon primary) and `DATABASE_URL_SECONDARY` (Prisma
+  secondary) if you want persistence plus automatic failover. Add
+  `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` for a shared read
+  cache in front of both databases. PayPal/R2/OpenRouter values come from
   `.env.example` — dashboard only, never in git.
 - Optional delivery/config variables on `ezri-api`:
   - `NOTIFY_WEBHOOK_URL` — a Zapier **Catch Hook** (or Make/webhook.site).
@@ -148,13 +150,14 @@ Copy-Item web/.env.example web/.env.local   # Next.js keys
 - The web reads `web/.env.local`; `NEXT_PUBLIC_*` values are inlined at
   dev/build start, so restart `pnpm dev` after editing.
 - `GET /api/health` reports what the gateway actually picked up:
-  `db` (`postgres` / `sqlite`), `ai_guard` (`openrouter` / `heuristic`),
-  `mock_paypal`, and `notify_webhook`. Use it to confirm keys without
-  exposing secrets.
+  `db` (`postgres` / `sqlite`), `db_mode` (`dual` / `single` / `sqlite`),
+  `db_primary`, `db_secondary`, `cache` (`upstash` / `memory` / `off`),
+  `cache_stats`, `ai_guard` (`openrouter` / `heuristic`), `mock_paypal`, and
+  `notify_webhook`. Use it to confirm keys without exposing secrets.
 - With every secret blank the gateway still runs the full zero-key demo:
-  mock PayPal, SQLite, heuristic AI guard.
+  mock PayPal, SQLite, heuristic AI guard, in-process cache.
 
-## Neon Postgres (current database)
+## Neon + Prisma Postgres (dual database)
 
 The repo carries the Neon policy in `neon.ts` and is linked to project
 `orange-frog-32627767`, branch `production`. The local link file `.neon` is
@@ -173,9 +176,47 @@ neon deploy          # apply the branch policy + pull env vars into .env
   `api/ledger.py`, per Neon's guidance. Pooled connections are for queries;
   schema work goes over the direct endpoint.
 
-Add both to Render `ezri-api`, plus `OPENROUTER_API_KEY` and
-`NOTIFY_WEBHOOK_URL`. `GET /api/health` should then report
-`db: "postgres"`, `ai_guard: "openrouter"`, and `notify_webhook: true`.
+The second Postgres is Prisma Postgres. Create a project in the Prisma
+Console and copy its pooled connection string into
+`DATABASE_URL_SECONDARY`. Prisma exposes only a pooled endpoint, so schema
+initialization also runs through it. Keep `DATABASE_URL_SECONDARY_UNPOOLED`
+blank unless your provider offers a direct URL.
+
+`api/ledger.py` then:
+
+- reads from the primary, and fails over to the secondary when the primary is
+  slow/down;
+- mirrors writes to both while healthy;
+- skips a target for `DB_FAILURE_COOLDOWN_SECONDS` after a connection failure
+  or a slow response, then retries it automatically;
+- falls back to SQLite only if every Postgres target fails.
+
+If a write happens while one target is down, it exists only on the healthy
+target. Single-row reads check the other target when the first returns empty,
+so failover still finds it. This is availability-first, not Postgres logical
+replication; for strict cross-database consistency, use one primary and a
+managed read replica instead.
+
+### Upstash Redis read cache
+
+Create a free Redis database at <https://console.upstash.com/redis>, open its
+**REST API** section, and copy the URL and token into
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`. The API caches SQL read
+results, sender sessions, and public user profiles; writes bump a shared cache
+generation. Cache failures fail open to Postgres. Without the keys it uses a
+per-process memory cache, which is fine for one Render instance but not shared
+between instances.
+
+Add these to Render `ezri-api`:
+
+- `DATABASE_URL` + `DATABASE_URL_UNPOOLED` (Neon)
+- `DATABASE_URL_SECONDARY` (Prisma)
+- `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`
+- `OPENROUTER_API_KEY` and `NOTIFY_WEBHOOK_URL`
+
+`GET /api/health` should then report `db_mode: "dual"`,
+`db_primary: "up"`, `db_secondary: "up"`, `cache: "upstash"`,
+`ai_guard: "openrouter"`, and `notify_webhook: true`.
 
 ## Fallback: Git-backed Node service (currently live)
 

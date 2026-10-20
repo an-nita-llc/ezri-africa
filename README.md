@@ -35,17 +35,19 @@ graph TD
     Gateway["🔀 API Direction Gateway (Port 8000)"]
     AIService["🤖 OpenRouter AI Microservice (Port 8001)"]
     DBService["🗄️ Database & Ledger Microservice (Port 8002)"]
-    PrismaPostgres[("Prisma Postgres / PostgreSQL")]
-    UpstashRedis[("Upstash Redis Cache")]
+    NeonPG[("Neon Postgres (primary)")]
+    PrismaPG[("Prisma Postgres (secondary)")]
+    UpstashRedis[("Upstash Redis Read Cache")]
     PayPalAPI["💳 PayPal Orders v2 & Refunds API"]
     DisburseRails["🌍 Pan-African Local Disburse (15 Nations)"]
 
     Client -->|REST & Bearer Auth| Gateway
     Gateway -->|Intent Parsing & Vision| AIService
     Gateway -->|Escrows & User Accounts| DBService
-    AIService -->|LLM Inference| OpenRouter["OpenRouter DeepSeek V4 & Qwen Vision"]
-    DBService -->|SQL Query| PrismaPostgres
-    DBService -->|Cache & Rate Limit| UpstashRedis
+    AIService -->|Intent Inference| OpenRouter["OpenRouter DeepSeek intent parsing"]
+    DBService -->|Mirror + failover| NeonPG
+    DBService -->|Mirror + failover| PrismaPG
+    DBService -->|Read cache| UpstashRedis
     DBService -->|Create / Capture / Refund| PayPalAPI
     DBService -->|Disburse Payout| DisburseRails
 ```
@@ -56,8 +58,8 @@ graph TD
 
 - 🌐 [**Web Frontend README (`web/README.md`)**](./web/README.md) — Next.js 16 PWA, full-bleed AI chat, PNG canvas receipts, virtual card vault, claim hub.
 - 🔀 [**API Direction Gateway README (`backend/gateway/README.md`)**](./backend/gateway/README.md) — Reverse proxy, CORS, route routing, multi-service health checks.
-- 🤖 [**AI Microservice README (`backend/ai-service/README.md`)**](./backend/ai-service/README.md) — OpenRouter DeepSeek V4 intent parsing, Qwen Vision receipt check, risk scoring.
-- 🗄️ [**Database Microservice README (`backend/db-service/README.md`)**](./backend/db-service/README.md) — Prisma Postgres schema, SQLite fallback, Upstash Redis caching.
+- 🤖 [**AI Microservice README (`backend/ai-service/README.md`)**](./backend/ai-service/README.md) — OpenRouter DeepSeek V4 intent parsing, deterministic receipt proof, risk scoring.
+- 🗄️ [**Database Microservice README (`backend/db-service/README.md`)**](./backend/db-service/README.md) — dual Postgres schema, SQLite fallback, Upstash Redis caching.
 - ⚡ [**Monolithic Backend README (`api/README.md`)**](./api/README.md) — Direct monolithic FastAPI server, MCP agent tools, Zapier webhooks.
 
 ---
@@ -109,7 +111,7 @@ sequenceDiagram
 
 ### 2. AI Copilot & Vision Endpoints (`:8001`)
 - `POST /api/chat/parse` — Parses prompt text via OpenRouter DeepSeek V4.
-- `POST /api/escrow/prove` — Submits receipt photo file to Qwen Vision AI for strict verification against purpose tags.
+- `POST /api/escrow/prove` — Submits a receipt photo to the deterministic proof guard for strict verification against purpose tags.
 
 ### 3. Escrow Lifecycle & Financial Ledger Endpoints (`:8002`)
 - `POST /api/escrow/create` — Creates purpose-locked escrow record in database and PayPal Orders v2.
@@ -126,7 +128,7 @@ sequenceDiagram
 
 ---
 
-## Database Entity Schema (Prisma Postgres)
+## Database Entity Schema (Neon + Prisma Postgres)
 
 ```prisma
 datasource db {
@@ -195,8 +197,8 @@ model VirtualCard {
 
 1. **Decoupled Microservices**: Isolating `ai-service` from `db-service` ensures that heavy LLM inference latencies or external API limits on OpenRouter never block database queries or payment webhooks.
 2. **Zero-Key Fallback Resilience**: Every microservice includes rule-based fallbacks. If `OPENROUTER_API_KEY` or `PAYPAL_CLIENT_ID` are unset, the app falls back to deterministic rule engines and mock PayPal sandbox IDs without breaking or throwing errors.
-3. **Prisma Postgres + SQLite Dual Engine**: Production connects to high-availability Prisma Postgres (`DATABASE_URL`), while local development automatically falls back to lightweight SQLite (`ezri.db`).
-4. **Upstash Redis Acceleration**: Caches live exchange rates and session tokens to maintain sub-50ms response times on client requests.
+3. **Dual Postgres + SQLite Engine**: Production writes to Neon (`DATABASE_URL`) and Prisma Postgres (`DATABASE_URL_SECONDARY`) at the same time. Reads prefer the healthy primary and fail over automatically when a target is slow or down; local development and zero-key demos fall back to SQLite (`ezri.db`).
+4. **Upstash Redis Read Cache**: Every ledger read (escrows, cards, preferences, events), sender session, and public user profile is cached in front of both databases. Writes bump a shared cache generation; a cache outage fails open to Postgres. Without Upstash keys the API uses a per-process memory cache.
 
 ---
 
@@ -238,16 +240,39 @@ python-dotenv) **without overriding** real process env, so Render dashboard
 values always win. `GET /api/health` reports what was actually picked up:
 
 ```json
-{"ok":true,"mock_paypal":false,"db":"postgres","ai_guard":"openrouter",
- "expiry_minutes":10,"fee_pct":0.02,"fx_lrd":194.5,"notify_webhook":true}
+{"ok":true,"mock_paypal":false,"db":"postgres","db_mode":"dual",
+ "db_primary":"up","db_secondary":"up","cache":"upstash",
+ "ai_guard":"openrouter","expiry_minutes":10,"fee_pct":0.02,
+ "fx_lrd":194.5,"notify_webhook":true}
 ```
+
+`db_primary` / `db_secondary` are `up`, `slow`, `down`, `unknown`, or
+`disabled`. `cache` is `upstash`, `memory`, or `off`; `cache_stats` exposes
+hits, misses, errors, and hit rate.
 
 ### API gateway (`ezri-api` on Render)
 
 | Variable | Needed? | What it does | Where to get it | Without it |
 |---|---|---|---|---|
-| `DATABASE_URL` | Recommended | Postgres persistence for users, sessions, escrows, cards, prefs, OTPs, reset tokens, and events | [Neon](https://neon.tech): create a free project, then Dashboard -> Connect -> copy the pooled connection string and add `?sslmode=require` if it is not already there. Prisma Postgres works too. | SQLite at `api/ezri.db`; data resets on every Render redeploy |
+| `DATABASE_URL` | Recommended | Primary Postgres for users, sessions, escrows, cards, prefs, OTPs, reset tokens, and events | [Neon](https://neon.tech): create a free project, then Dashboard -> Connect -> copy the pooled connection string and add `?sslmode=require` if it is not already there | SQLite at `api/ezri.db`; data resets on every Render redeploy |
 | `DATABASE_URL_UNPOOLED` | No | Direct Neon URL used only for one-time schema initialization | The Neon CLI writes it automatically (`neon env pull`) | Schema init runs over the pooled URL (works, but less ideal) |
+| `DATABASE_URL_SECONDARY` | Recommended for failover | Second independent Postgres. Writes are mirrored to it while healthy; reads fail over to it when the primary is slow or down | [Prisma Postgres](https://console.prisma.io): create a project and copy the pooled `postgres://...@pooled.db.prisma.io:5432/postgres?sslmode=require` string | Single-database mode (Neon only); no second door |
+| `DATABASE_URL_SECONDARY_UNPOOLED` | No | Optional direct URL for secondary schema initialization | Only if your secondary provider exposes a direct endpoint | Pooled secondary URL is used for init |
+| `DB_MIRROR_WRITES` | No | Mirror writes to both Postgres targets (`true`) or keep the secondary as a standby (`false`) | Default `true` | true |
+| `DB_CONNECT_TIMEOUT` | No | Seconds allowed to open a Postgres connection | Default `5` | 5 |
+| `DB_STATEMENT_TIMEOUT_MS` | No | Postgres statement timeout in milliseconds, so a heavy target fails over instead of hanging | Default `3000` | 3000 |
+| `DB_INIT_TIMEOUT` | No | Seconds allowed for schema initialization | Default `15` | 15 |
+| `DB_INIT_TIMEOUT_MS` | No | Schema-initialization statement timeout in milliseconds | Default `15000` | 15000 |
+| `DB_FAILURE_COOLDOWN_SECONDS` | No | How long a down/slow target is skipped before retrying | Default `30` | 30 |
+| `DB_SLOW_MS` | No | Latency above which reads prefer the other target | Default `3000` | 3000 |
+| `DB_POOL_MIN` | No | Minimum warm connections per Postgres target | Default `1` | 1 |
+| `DB_POOL_MAX` | No | Maximum connections per Postgres target | Default `5` | 5 |
+| `UPSTASH_REDIS_REST_URL` | Optional | Shared Redis read cache for SQL results, sessions, and user profiles | [Upstash Console](https://console.upstash.com/redis): create a free Redis DB -> REST API -> copy the URL | Per-process memory cache (works, but not shared across instances) |
+| `UPSTASH_REDIS_REST_TOKEN` | Optional | Token for the same Upstash database | Same screen as the URL | Per-process memory cache |
+| `DB_CACHE_ENABLED` | No | Enable the read cache (`true`) or bypass it (`false`) | Default `true` | true |
+| `DB_READ_CACHE_TTL` | No | Seconds to cache SQL read results | Default `30` | 30 |
+| `SESSION_CACHE_TTL` | No | Seconds to cache a valid sender session | Default `600` | 600 |
+| `USER_CACHE_TTL` | No | Seconds to cache a public user profile | Default `60` | 60 |
 | `PAYPAL_CLIENT_ID` | Optional | PayPal Orders v2 sandbox OAuth | [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox): Apps & Credentials -> Sandbox -> Create App -> copy Client ID | Mock PayPal (`MOCK-` order/capture ids, mock approval page) |
 | `PAYPAL_CLIENT_SECRET` | Optional | Secret for the same PayPal sandbox app | Same screen as the Client ID | Mock PayPal |
 | `PAYPAL_BASE_URL` | No | PayPal API host | Default `https://api-m.sandbox.paypal.com`; use `https://api-m.paypal.com` only for live money | Sandbox host |
@@ -273,8 +298,8 @@ fine) to create the sandbox app. The money is received by a sandbox **Business**
 account, which the dashboard creates for you. Going live with real payments
 requires a PayPal **Business** account; the hackathon demo stays in sandbox.
 
-Reserved but not read by current code: `REDIS_URL`, `UPSTASH_REDIS_REST_URL`,
-`UPSTASH_REDIS_REST_TOKEN`, `CLOUDFLARE_R2_ACCOUNT_ID`,
+The cache uses the Upstash REST API; a TCP `REDIS_URL` is not used by the API
+service. Reserved but not read by current code: `CLOUDFLARE_R2_ACCOUNT_ID`,
 `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`,
 `CLOUDFLARE_R2_BUCKET_NAME`.
 
@@ -290,9 +315,12 @@ build and restart `pnpm dev` after any change.
 
 ### Where to put the production values
 
-- **Render `ezri-api`** -> Environment: `DATABASE_URL`, `PAYPAL_CLIENT_ID`,
-  `PAYPAL_CLIENT_SECRET`, `OPENROUTER_API_KEY`, `NOTIFY_WEBHOOK_URL`. Save and
-  Render redeploys automatically.
+- **Render `ezri-api`** -> Environment: `DATABASE_URL`,
+  `DATABASE_URL_UNPOOLED`, `DATABASE_URL_SECONDARY`, `UPSTASH_REDIS_REST_URL`,
+  `UPSTASH_REDIS_REST_TOKEN`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`,
+  `OPENROUTER_API_KEY`, `NOTIFY_WEBHOOK_URL`. The non-secret resilience knobs
+  (`DB_MIRROR_WRITES`, TTLs, timeouts) are already declared in `render.yaml`.
+  Save and Render redeploys automatically.
 - **Render `ezri-web`** -> Environment: `NEXT_PUBLIC_PAYPAL_CLIENT_ID` (and
   `NEXT_PUBLIC_API_URL` if the domain ever changes). Use **Clear build cache &
   deploy** so the value is inlined into the bundle.
@@ -304,11 +332,13 @@ build and restart `pnpm dev` after any change.
 
 ### Minimum path to a fully live demo
 
-1. Neon `DATABASE_URL` -> persistence across redeploys.
-2. PayPal sandbox Client ID + Secret -> real sandbox orders (no real money).
-3. OpenRouter key -> real LLM parsing and vision verdicts.
-4. Zapier Catch Hook -> real OTP and reset email delivery.
-5. `NEXT_PUBLIC_PAYPAL_CLIENT_ID` -> browser PayPal buttons.
+1. Neon `DATABASE_URL` -> primary persistence across redeploys.
+2. Prisma `DATABASE_URL_SECONDARY` -> automatic second door and mirrored writes.
+3. Upstash `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` -> shared read cache in front of both databases.
+4. PayPal sandbox Client ID + Secret -> real sandbox orders (no real money).
+5. OpenRouter key -> real LLM intent parsing (receipt proof stays deterministic).
+6. Zapier Catch Hook -> real OTP and reset email delivery.
+7. `NEXT_PUBLIC_PAYPAL_CLIENT_ID` -> browser PayPal buttons.
 
 ---
 

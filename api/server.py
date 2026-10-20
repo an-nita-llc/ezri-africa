@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import threading
 import time
 import uuid
 
@@ -14,14 +15,15 @@ from env_loader import load_env
 
 load_env()  # local .env support -- must run before ledger/paypal/ai_guard imports
 
+import cache
 from ai_guard import FEE_PCT, OPENROUTER_KEY, fee_of, parse_intent, strict_proof_check
 from notify import emit, emit_raw, webhook_url
 from ledger import (
-    DATABASE_URL as LEDGER_DATABASE_URL,
-    create_card, create_escrow, create_session, create_user, delete_card, delete_otp,
-    find_by_capture, get_card, get_escrow, get_otp, get_prefs, get_reset, get_session_email,
-    get_user, list_cards, list_escrows, list_events, save_otp, save_prefs, save_reset,
-    set_password, update_card, update_escrow, update_user_profile, use_reset, verify_user,
+    create_card, create_escrow, create_session, create_user, db_status, delete_card,
+    delete_otp, find_by_capture, get_card, get_escrow, get_otp, get_prefs, get_reset,
+    get_session_email, get_user, list_cards, list_escrows, list_events, save_otp,
+    save_prefs, save_reset, set_password, update_card, update_escrow,
+    update_user_profile, use_reset, verify_user, warmup,
 )
 from models import (
     CaptureIn, CardCreateIn, CardDeleteIn, CardFreezeIn, CardTopupIn, EscrowCreateIn,
@@ -67,12 +69,26 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def _startup() -> None:
+    """Warm both DB doors in the background; never block boot on one of them."""
+    threading.Thread(target=warmup, name="ezri-db-warmup", daemon=True).start()
+
+
 @app.get("/api/health")
 def health() -> dict:
+    db = db_status()
+    targets = {t["name"]: t for t in db["targets"]}
     return {
         "ok": True,
         "mock_paypal": MOCK,
-        "db": "postgres" if LEDGER_DATABASE_URL else "sqlite",
+        "db": "postgres" if db["mode"] != "sqlite" else "sqlite",
+        "db_mode": db["mode"],
+        "db_primary": targets.get("primary", {}).get("status", "disabled"),
+        "db_secondary": targets.get("secondary", {}).get("status", "disabled"),
+        "db_targets": db["targets"],
+        "cache": cache.backend(),
+        "cache_stats": cache.stats(),
         "ai_guard": "openrouter" if OPENROUTER_KEY else "heuristic",
         "expiry_minutes": EXPIRY_MIN,
         "fee_pct": FEE_PCT,  # Ezri platform fee: 2% of every transaction

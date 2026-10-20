@@ -5,7 +5,7 @@
 ```
 backend/
 ├── gateway/         ── Port 8000: Direction Gateway, Auth middleware, Rate-limiting, CORS Router
-├── ai-service/      ── Port 8001: OpenRouter DeepSeek intent parser, Qwen Vision receipt inspector, Risk engine
+├── ai-service/      ── Port 8001: optional OpenRouter intent parser, receipt inspector, Risk engine
 └── db-service/      ── Port 8002: Prisma Postgres / PostgreSQL database layer & Escrow lifecycle
     └── prisma/
         └── schema.prisma  ── PostgreSQL database schema
