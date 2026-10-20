@@ -71,6 +71,25 @@ def test_reads_fail_over_and_writes_mirror(monkeypatch):
     assert [name for name, _ in calls] == ["primary", "secondary"]
 
 
+def test_primary_write_failure_uses_secondary(monkeypatch):
+    monkeypatch.setattr(cache, "CACHE_ENABLED", False)
+    primary, secondary = _targets(monkeypatch)
+    calls = []
+
+    def fake_run(target, query, params):
+        calls.append((target.name, query))
+        if target.name == "primary":
+            raise RuntimeError("primary write down")
+        return []
+
+    monkeypatch.setattr(ledger, "_run_on_target", fake_run)
+
+    ledger._execute("UPDATE escrows SET status=? WHERE id=?", ("HELD", "EZR-3"))
+    assert [name for name, _ in calls] == ["primary", "secondary"]
+    assert primary.status() == "down"
+    assert secondary.status() == "up"
+
+
 def test_empty_read_checks_the_second_door(monkeypatch):
     monkeypatch.setattr(cache, "CACHE_ENABLED", False)
     _targets(monkeypatch)
