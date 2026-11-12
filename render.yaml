@@ -1,0 +1,90 @@
+services:
+  - type: web
+    name: ezri-api
+    runtime: python
+    plan: free
+    domains:
+      - api.ezri-africa.com
+    buildCommand: "pip install -r api/requirements.txt"
+    startCommand: "uvicorn server:app --app-dir api --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    envVars:
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://ezri-africa.com,https://www.ezri-africa.com,https://ezri-africa.onrender.com
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false # empty = mock PayPal (zero-key demo mode)
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false # empty = heuristic AI guard
+      - key: DEMO_EXPIRY_MINUTES
+        value: 10
+      - key: DATABASE_URL
+        sync: false # primary Postgres (Neon pooled) -- Render dashboard only
+      - key: DATABASE_URL_UNPOOLED
+        sync: false # optional direct Neon URL for schema initialization
+      - key: DATABASE_URL_SECONDARY
+        sync: false # secondary Postgres (Prisma pooled) -- automatic failover
+      - key: DB_MIRROR_WRITES
+        value: "true"
+      - key: DB_CONNECT_TIMEOUT
+        value: "5"
+      - key: DB_STATEMENT_TIMEOUT_MS
+        value: "3000"
+      - key: DB_FAILURE_COOLDOWN_SECONDS
+        value: "30"
+      - key: DB_SLOW_MS
+        value: "3000"
+      - key: DB_POOL_MIN
+        value: "1"
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false # Upstash REST URL -- empty = in-process memory cache
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false # Upstash REST token
+      - key: DB_CACHE_ENABLED
+        value: "true"
+      - key: DB_READ_CACHE_TTL
+        value: "30"
+      - key: SESSION_CACHE_TTL
+        value: "600"
+      - key: USER_CACHE_TTL
+        value: "60"
+      - key: OPENROUTER_MODELS
+        value: deepseek/deepseek-chat,qwen/qwen-2.5-72b-instruct
+      - key: NOTIFY_WEBHOOK_URL
+        sync: false # Zapier Catch Hook -- empty = events only in the local log
+      - key: WEB_BASE_URL
+        value: https://ezri-africa.com
+      # R2 media: uploads bucket (public via media.ezri-africa.com).
+      - key: CLOUDFLARE_R2_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_R2_BUCKET_NAME
+        value: ezri-africa-uploads
+      - key: CLOUDFLARE_R2_PUBLIC_BASE_URL
+        value: https://media.ezri-africa.com
+      # R2 documents: separate bucket/key (public via docs.ezri-africa.com).
+      - key: CLOUDFLARE_R2_DOCUMENTS_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_DOCUMENTS_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_R2_DOCUMENTS_BUCKET_NAME
+        value: ezri-africa-documents
+      - key: CLOUDFLARE_R2_DOCUMENTS_PUBLIC_BASE_URL
+        value: https://docs.ezri-africa.com
+  - type: web
+    name: ezri-web
+    runtime: image
+    plan: free
+    # Built and published by .github/workflows/web-ci-image.yml.
+    # Builds run on GitHub's 16 GB runners, so Render never compiles the app.
+    image:
+      url: ghcr.io/an-nita-llc/ezri-web:latest
+    healthCheckPath: /

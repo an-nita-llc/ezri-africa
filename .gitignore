@@ -1,28 +1,51 @@
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+MASTER_CREDENTIALS.md
+**/MASTER_CREDENTIALS.md
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local configuration
+.neon
+
 # Dependencies
 node_modules/
 
-# Next.js and other build output
+# Build output and tooling caches
 .next/
 out/
 build/
 dist/
 coverage/
-
-# Local tooling caches
 .turbo/
 .cache/
 .vercel/
 .netlify/
+*.tsbuildinfo
+target/
 
-# Environment files and secrets
-.env
-.env.*
-!.env.example
-!.env.sample
-*.pem
-*.key
-*.p12
-*.pfx
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+htmlcov/
+
+# Local databases and uploaded data
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+uploads/
 
 # Logs
 *.log

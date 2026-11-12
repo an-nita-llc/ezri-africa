@@ -1,0 +1,53 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { AuthShell } from "@/components/auth/auth-shell";
+import { Logo } from "@/components/brand/logo";
+import { BottomNav } from "@/components/navigation/bottom-nav";
+import { HamburgerMenu } from "@/components/navigation/hamburger-menu";
+import { Sidebar } from "@/components/navigation/sidebar";
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isAuth =
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname === "/verify-email" ||
+    pathname === "/two-factor";
+
+  const isHomeChat = pathname === "/";
+
+  if (isAuth) {
+    return <AuthShell>{children}</AuthShell>;
+  }
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-background w-full">
+      <Sidebar />
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur-md md:hidden">
+        <Logo size="sm" />
+        <HamburgerMenu />
+      </header>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      >
+        Skip to main content
+      </a>
+      <main id="main-content" className="flex-1 flex flex-col pb-20 md:pb-0 md:pl-64 w-full min-w-0">
+        {isHomeChat ? (
+          <div className="w-full flex-1 flex flex-col h-[calc(100dvh-4rem)] md:h-dvh overflow-hidden">
+            {children}
+          </div>
+        ) : (
+          <div className="w-full flex-1 flex flex-col p-2 sm:p-4 md:p-6 min-w-0">
+            {children}
+          </div>
+        )}
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
