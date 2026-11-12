@@ -1,0 +1,9 @@
+{
+  "name": "Ezri Africa — Proof Before Payout",
+  "short_name": "Ezri",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#003868",
+  "description": "Chat, lock, prove. Protected mobile money with AI verification and escrow."
+}
